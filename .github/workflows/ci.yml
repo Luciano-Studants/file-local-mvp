@@ -20,8 +20,6 @@ jobs:
         include:
           - { os: ubuntu-latest, python: '3.13' }
           - { os: windows-latest, python: '3.12' }
-    # O Windows nunca foi exercitado antes deste CI: enquanto não estiver verde, falhas dele aparecem no relatório sem bloquear o Linux.
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'

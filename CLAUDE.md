@@ -29,7 +29,7 @@ Conversor/ferramentas de arquivos **offline** para Windows 10/11 (também roda e
 
 ## Estado
 - Categorias ativas: **Imagens** e **PDF** (13/13 itens, Portão B aprovado no Linux). Próximas: Vídeo, Áudio, Documentos… (ver `docs/`).
-- **Windows ainda não verificado desde a 0.9.6** (suíte, instalador, PyInstaller). O CI roda Windows com `continue-on-error` até ficar verde; o checklist manual está em `windows_acceptance_check.py`.
+- **Windows:** suíte (998 testes, 26 pulados por falta de Tesseract etc.), smoke e qualidade do PDF passam no CI (windows-latest, Python 3.12) desde 02/11/2026. **Ainda não exercitados no Windows:** PyInstaller, instalador (Inno Setup) e o app empacotado — rode «Build Windows» em Actions. Checklist manual: `windows_acceptance_check.py`.
 - Pendências legais: HEVC/x265, DLLs do Tesseract, pesos U²-Net/DUTS-TR.
 
 ## Fluxo de trabalho

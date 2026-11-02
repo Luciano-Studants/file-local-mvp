@@ -16,5 +16,5 @@
 ## Cada entrega
 `git switch -c item-NN-nome` → mudanças → commit → push → abrir PR → CI verde → merge na `main`.
 
-## Windows verde
-O job do Windows usa `continue-on-error` (aparece amarelo/vermelho sem bloquear). Quando ficar verde por alguns dias, remova essa linha de `.github/workflows/ci.yml` para ele passar a bloquear.
+## Windows
+O job do Windows agora bloqueia o merge como o do Linux (ficou verde em 02/11/2026). Ele usa uma pasta temporária de caminho longo (`runner.temp`) para evitar o nome curto `RUNNER~1`.
