@@ -155,7 +155,7 @@ class OcrFailureTests(unittest.TestCase):
         self.assertEqual(list(self.out.iterdir()), [])
 
     def test_tesseract_failure_is_reported_in_portuguese(self):
-        with patch.dict(ocr._cache, {'exe': '/usr/bin/false', 'langs': {'por', 'eng'}}, clear=True):
+        with patch.dict(ocr._cache, {'exe': sys.executable, 'langs': {'por', 'eng'}}, clear=True):      # um programa que sempre falha com estes argumentos (vale no Windows e no Linux)
             with self.assertRaises(ConversionError) as caught: convert({'paths': [str(self.source)], 'target': 'OCR → Text', 'output': str(self.out)})
             self.assertIn('não conseguiu reconhecer', str(caught.exception))
         self.assertEqual(list(self.out.iterdir()), [])
