@@ -41,7 +41,7 @@ class Base(unittest.TestCase):
         path = self.root / name; photo.save(path, save_all=True, append_images=[blue, icon, photo]); return path
 
     def names(self, outputs):
-        return [str(Path(x).relative_to(self.root)) for x in outputs]
+        return [Path(x).relative_to(self.root).as_posix() for x in outputs]
 
 
 class TextTests(Base):

@@ -42,7 +42,7 @@ class Base(unittest.TestCase):
         return [int(float(p.mediabox.width)) for p in PdfReader(str(path)).pages]
 
     def names(self, outputs):
-        return [str(Path(x).relative_to(self.root)) for x in outputs]
+        return [Path(x).relative_to(self.root).as_posix() for x in outputs]
 
 
 class GroupTests(unittest.TestCase):

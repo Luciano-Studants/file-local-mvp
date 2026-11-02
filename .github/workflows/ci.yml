@@ -44,6 +44,7 @@ jobs:
           status=$?
           echo "---- resumo ----"; tail -n 4 test.log
           echo "---- falhas e erros ----"; grep -E "^(ERROR|FAIL):" test.log || echo "nenhum"
+          echo "---- detalhes (até 250 linhas) ----"; sed -n '/^======/,$p' test.log | head -n 250
           echo "---- motivos dos testes pulados ----"; grep -o "skipped '.*'" test.log | sort | uniq -c | sort -rn | head -20
           exit $status
       - name: Guardar o log completo dos testes

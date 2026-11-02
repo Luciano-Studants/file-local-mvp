@@ -73,7 +73,7 @@ class EngineTests(Base):
         marks = Path(convert({'paths': [source], 'target': TXT, 'ocr_lang': 'eng', 'text_mode': 'marks'})[0]).read_text(encoding='utf8')
         self.assertIn('--- Página 2 ---', marks)
         out = runner.run_job({'paths': [source], 'target': TXT, 'ocr_lang': 'eng', 'text_mode': 'pages', 'pdf_pages': '1-2'})
-        self.assertEqual(sorted(str(Path(p).relative_to(self.root)) for p in out), ['scan - texto/pagina-001.txt', 'scan - texto/pagina-002.txt'])
+        self.assertEqual(sorted(Path(p).relative_to(self.root).as_posix() for p in out), ['scan - texto/pagina-001.txt', 'scan - texto/pagina-002.txt'])
 
     def test_pages_with_text_are_skipped_or_forced(self):
         source = str(self.text_pdf())
