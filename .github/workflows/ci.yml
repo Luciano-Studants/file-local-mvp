@@ -1,5 +1,9 @@
 name: CI
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -55,8 +59,10 @@ jobs:
           path: test.log
           if-no-files-found: ignore
       - name: Teste de fumaça do programa
+        if: ${{ !cancelled() }}
         run: python app.py --smoke-test
       - name: Suíte de qualidade (PDF, rápida)
+        if: ${{ !cancelled() }}
         run: python tools/quality_suite.py --only pdf --fast --out quality-report
       - name: Guardar o relatório de qualidade
         if: always()
