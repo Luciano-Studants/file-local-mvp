@@ -1,0 +1,34 @@
+name: Build Windows
+
+# Gera o pacote portátil (ZIP) e o instalador. Manual: aba Actions → «Build Windows» → Run workflow. Também roda ao criar uma tag v*.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'      # o roteiro instalador\build_windows.ps1 exige 3.12 de 64 bits
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: powershell
+      - name: Roteiro de build (testes, qualidade, PyInstaller, verificação, instalador)
+        run: powershell -ExecutionPolicy Bypass -File instalador\build_windows.ps1
+      - name: Guardar os arquivos gerados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arquivo-local-windows
+          path: |
+            dist/*.zip
+            dist/*.exe
+            dist/relatorio-qualidade
+          if-no-files-found: warn
