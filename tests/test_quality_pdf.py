@@ -69,7 +69,7 @@ class DetectorTests(Base):
 class FullRunTests(Base):
     def test_pdf_quality_run_passes_with_no_blocking_failures(self):
         out = self.root / 'rel'
-        result = subprocess.run([sys.executable, str(ROOT / 'tools' / 'quality_suite.py'), '--only', 'pdf', '--fast', '--out', str(out)], cwd=str(ROOT), capture_output=True, text=True, timeout=600)
+        result = subprocess.run([sys.executable, str(ROOT / 'tools' / 'quality_suite.py'), '--only', 'pdf', '--fast', '--out', str(out)], cwd=str(ROOT), capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=600)
         self.assertEqual(result.returncode, 0, result.stdout[-1500:] + result.stderr[-800:])
         data = json.loads((out / 'quality-report.json').read_text(encoding='utf8'))
         pdf = [r for r in data['results'] if r['func'].startswith('PDF')]

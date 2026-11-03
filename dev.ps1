@@ -9,7 +9,7 @@ Set-Location $PSScriptRoot
 $py = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
 function Need-Venv { if (-not (Test-Path $py)) { throw 'Rode primeiro:  .\dev.ps1 setup' } }
 switch ($Task) {
-    'setup'   { & python -m venv .venv; & $py -m pip install --upgrade pip; & $py -m pip install -r requirements.txt -r requirements-dev.txt; & $py tools\doctor.py }
+    'setup'   { if (-not (Test-Path $py)) { & python -m venv .venv }; & $py -m pip install --upgrade pip; & $py -m pip install -r requirements.txt -r requirements-dev.txt; & $py tools\doctor.py }
     'doctor'  { Need-Venv; & $py tools\doctor.py }
     'run'     { Need-Venv; & $py app.py }
     'test'    { Need-Venv; $env:QT_QPA_PLATFORM = 'offscreen'; & $py -I -W ignore -m unittest discover -s tests -q }

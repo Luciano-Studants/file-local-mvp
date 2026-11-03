@@ -1011,6 +1011,9 @@ def write_report(out_dir, seconds):
 
 
 def main(argv=None):
+    for stream in (sys.stdout, sys.stderr):      # console do Windows (cp1252) não imprime «→»; saída sempre em UTF-8
+        try: stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, ValueError): pass
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--out', default='quality-report'); parser.add_argument('--corpus'); parser.add_argument('--fast', action='store_true'); parser.add_argument('--only', choices=('all', 'images', 'pdf'), default='all')
     args = parser.parse_args(argv)
