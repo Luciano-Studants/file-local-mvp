@@ -21,7 +21,7 @@ from radial_menu import actions_for_selection, flatten_actions, image_tool_actio
 
 DESKTOP = Path(__file__).resolve().parents[1]
 # módulos do núcleo: não podem importar Qt nem módulos de interface/sistema operacional
-CORE_MODULES = ('engine.py', 'tool_registry.py', 'package.py', 'runner.py', 'vector.py', 'ocr.py', 'illustrator.py', 'metafile.py', 'bgremove.py', 'winjob.py', 'pdfinfo.py', 'pdfcompress.py', 'pdfstamp.py', 'pdfredact.py', 'pdfform.py')
+CORE_MODULES = ('engine.py', 'tool_registry.py', 'package.py', 'runner.py', 'vector.py', 'ocr.py', 'illustrator.py', 'metafile.py', 'bgremove.py', 'winjob.py', 'pdfinfo.py', 'pdfcompress.py', 'pdfstamp.py', 'pdfredact.py', 'pdfform.py', 'mediatools.py')
 FORBIDDEN_IN_CORE = {'PySide6', 'vector_qt', 'tray_app', 'workspace_panel', 'radial_menu', 'visual_tools', 'widgets', 'theme', 'icons', 'windows_bridge', 'global_hotkey', 'shell_integration', 'win32gui', 'win32com', 'pythoncom', 'winreg'}
 
 

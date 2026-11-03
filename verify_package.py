@@ -37,6 +37,7 @@ required = [
     'ArquivoLocal/source/Desktop/windows_bridge.py',
     'ArquivoLocal/source/Desktop/engine.py',
     'ArquivoLocal/source/Desktop/ocr.py',
+    'ArquivoLocal/source/Desktop/mediatools.py',
     'ArquivoLocal/source/Desktop/bgremove.py',
     'ArquivoLocal/source/Desktop/winjob.py',
     'ArquivoLocal/source/Desktop/pdfinfo.py',
