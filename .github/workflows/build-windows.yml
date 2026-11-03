@@ -29,7 +29,7 @@ jobs:
         run: powershell -ExecutionPolicy Bypass -File instalador\build_windows.ps1
       - name: Guardar os arquivos gerados
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: arquivo-local-windows
           path: |
