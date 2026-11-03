@@ -1,4 +1,4 @@
-<#
+﻿<#
  Atalhos de desenvolvimento no Windows (PowerShell, na pasta do repositório).
  Uso:  .\dev.ps1 setup | doctor | run | test | quality | smoke | build
  Se o PowerShell bloquear scripts:  powershell -ExecutionPolicy Bypass -File .\dev.ps1 test

@@ -1,4 +1,4 @@
-<#
+﻿<#
  Copia o Tesseract instalado (Windows) para a pasta «tesseract» ao lado do package.py, para entrar no pacote.
  Uso:  powershell -ExecutionPolicy Bypass -File tools\stage_tesseract.ps1 [-Source "C:\Program Files\Tesseract-OCR"]
  Copia só o executável, as DLLs e as licenças; os dados de idioma do app ficam em tessdata\ (eng, por, pdf.ttf).
