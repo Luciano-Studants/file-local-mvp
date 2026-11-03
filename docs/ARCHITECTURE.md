@@ -39,6 +39,7 @@ Objetivo do produto: aplicativo de desktop **publicável e instalável** em Wind
 4. Testes: tamanho/valores, entradas inválidas, original intacto, sem sobrescrever, alfa/EXIF/ICC quando couber, painel, lista branca.
 5. `test_architecture` verde; suíte completa verde em Linux; item novo no diagnóstico do Windows.
 6. Registro de continuidade e RELEASE atualizados.
+7. **Roda:** a ferramenta está num grupo da roda (`PDF_GROUPS`/`GROUPS`), com rótulo ≤ 13 caracteres e descrição; `tests/test_wheel_layout.py` passa (≤ 8 fatias por roda) e a roda foi conferida visualmente.
 
 ## Camadas de teste
 | Camada | Onde | Mede |

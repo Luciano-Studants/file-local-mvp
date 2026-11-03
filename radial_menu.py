@@ -24,12 +24,15 @@ IMAGE_SUFFIXES = {'.png', '.jpg', '.jpeg', '.webp', '.tif', '.tiff', '.bmp', '.a
 ACTION_ICONS = {
     **{spec.action: spec.icon for spec in tool_registry.IMAGE_TOOLS}, **{spec.target: spec.icon for spec in tool_registry.IMAGE_TOOLS},
     **{tool_registry.group_action(group): icon for group, (_label, _tip, icon) in tool_registry.GROUPS.items()}, '__group_back__': 'back',
+    **{tool_registry.pdf_group_action(group): icon for group, (_label, _tip, icon, _members) in tool_registry.PDF_GROUPS.items()},
+    **{target: icon for _l, _t, _i, members in tool_registry.PDF_GROUPS.values() for target, _label, _tip, icon in members},
     '__panel__': 'tools', 'PDF → Text': 'text', 'PDF → Images': 'image', 'Split PDF': 'split', '__panel_merge__': 'merge', 'Merge PDFs': 'merge',
-    '__copy_paths__': 'copy', '__copy_files__': 'copy', '__shelf_add__': 'shelf', '__open_terminal__': 'terminal',
+    '__copy_paths__': 'copy', '__copy_files__': 'copy', '__copy_group__': 'copy', '__shelf_add__': 'shelf', '__open_terminal__': 'terminal',
 }
 
 
 BACK_TARGET = '__group_back__'
+COPY_GROUP_TARGET = '__copy_group__'      # «Copiar» agrupa «Caminhos» e «Arquivos» para a roda não passar de 8 fatias
 
 
 @dataclass(frozen=True)
@@ -103,6 +106,15 @@ def image_tool_actions(selection_only: bool = False, engine_targets: bool = Fals
     return actions
 
 
+def pdf_tool_actions() -> list[RadialAction]:
+    """Fatias de primeiro nível das operações de PDF; cada grupo abre uma sub-roda com as operações como filhas."""
+    actions = []
+    for group, (label, tip, _icon, members) in tool_registry.PDF_GROUPS.items():
+        children = tuple(RadialAction(member_label, target, member_tip) for target, member_label, member_tip, _member_icon in members)
+        actions.append(RadialAction(label, tool_registry.pdf_group_action(group), tip, children=children))
+    return actions
+
+
 def actions_for_selection(paths: list[str], capabilities: dict | None = None) -> list[RadialAction]:
     """Ferramentas do tipo de arquivo mais ações comuns; aberto por Shift+F9."""
     suffixes = {Path(path).suffix.lower() for path in paths}
@@ -129,8 +141,10 @@ def actions_for_selection(paths: list[str], capabilities: dict | None = None) ->
         actions = []
     actions = [
         *actions,
-        RadialAction('Copiar caminhos', '__copy_paths__', 'Copiar caminhos como texto'),
-        RadialAction('Copiar arquivos', '__copy_files__', 'Copiar referências para colar no Explorer'),
+        RadialAction('Copiar', COPY_GROUP_TARGET, 'Copiar os caminhos como texto ou os arquivos para colar no Explorer', children=(
+            RadialAction('Caminhos', '__copy_paths__', 'Copiar caminhos como texto'),
+            RadialAction('Arquivos', '__copy_files__', 'Copiar referências para colar no Explorer'),
+        )),
         RadialAction('Prateleira', '__shelf_add__', 'Guardar na prateleira da sessão'),
     ]
     if len(paths) == 1:

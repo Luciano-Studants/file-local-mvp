@@ -45,15 +45,16 @@ class RadialUITests(unittest.TestCase):
         actions = actions_for_selection([r'C:\Users\Test\photo.png'])
         targets=[a.target for a in actions]
         self.assertEqual(targets[:5], ['__group_transform__','__group_look__','__group_draw__','__group_protect__','__group_read__'])
-        self.assertEqual(targets[5:], ['__copy_paths__','__copy_files__','__shelf_add__','__open_terminal__'])
+        self.assertEqual(targets[5:], ['__copy_group__','__shelf_add__','__open_terminal__'])
+        self.assertEqual([a.target for a in actions[5].children], ['__copy_paths__','__copy_files__'])
         self.assertEqual([a.target for a in flatten_actions(actions)][:12], ['__tool_crop__','__tool_resize__','__tool_rotate__','__tool_canvas__','__tool_compress__','__tool_adjust__','__tool_levels__','__tool_sharpen__','__tool_backdrop__','__tool_removebg__','__tool_annotate__','__tool_shapes__'])
         multiple = actions_for_selection([r'C:\Users\Test\one.png', r'C:\Users\Test\two.png'])
-        self.assertEqual([a.target for a in multiple], ['__tool_collage__', '__tool_onepdf__', '__copy_paths__', '__copy_files__', '__shelf_add__'])
+        self.assertEqual([a.target for a in flatten_actions(multiple)], ['__tool_collage__', '__tool_onepdf__', '__copy_paths__', '__copy_files__', '__shelf_add__'])
         mixed = actions_for_selection([r'C:\Users\Test\one.png', r'C:\Users\Test\doc.pdf'])
-        self.assertEqual([a.target for a in mixed], ['__copy_paths__', '__copy_files__', '__shelf_add__'])
+        self.assertEqual([a.target for a in flatten_actions(mixed)], ['__copy_paths__', '__copy_files__', '__shelf_add__'])
 
     def test_secondary_radial_is_contextual_for_pdf(self):
-        targets=[a.target for a in actions_for_selection([r'C:\Users\Test\report.pdf'])]
+        targets=[a.target for a in flatten_actions(actions_for_selection([r'C:\Users\Test\report.pdf']))]
         self.assertEqual(targets[:4],['PDF → Text','PDF → Images','Split PDF','__panel_merge__'])
         self.assertIn('__copy_paths__',targets)
 
