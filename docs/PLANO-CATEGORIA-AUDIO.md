@@ -9,17 +9,28 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 - A extensão não decide o formato: sempre `ffprobe`.
 - Roda: grupos com no máximo 8 fatias e rótulos ≤ 13 caracteres (`tests/test_wheel_layout.py`).
 
-## Itens (do menor para o maior risco)
-1. **Base de mídia — entregue (0.9.43):** `mediatools.py` (localizar FFmpeg/ffprobe, licença do build, codificadores, leitura segura de informações), capacidade «Áudio», diagnóstico, FFmpeg no CI, trava de licença no pacote.
-2. **Painel de Áudio — informações:** arrastar um áudio mostra duração, codec, taxa, canais, etiquetas e capa; roda do Áudio em grupos; operação `audio_info` no worker.
-3. **Converter:** MP3, M4A/AAC, FLAC, OGG/Vorbis, Opus, WAV, AIFF; qualidade (bitrate/VBR/nível FLAC); relatório de perdas (lossy → lossless não recupera qualidade).
-4. **Metadados:** ver tudo; remover/editar só etiquetas permitidas; capa.
-5. **Canais:** mono/estéreo, downmix explícito, aviso de clipping/fase.
-6. **Cortar:** início/fim com onda visual; silêncio só nas pontas.
-7. **Normalizar volume:** EBU R128 (loudnorm em duas passadas); recusar alvos que causam clipping.
-8. **Comprimir:** bitrate-alvo, tamanho como melhor esforço.
-9. **Bleep:** intervalos validados, tom sintético; cópia nova, não é anonimização criptográfica.
-10. **Visualizador em MP4:** exige codificador de vídeo aprovado; por último.
+## Itens (do menor para o maior risco) — siga nesta ordem, um por «próximo passo»
+| # | Funcionalidade | Estado |
+|---|---|---|
+| 1 | **Base de mídia:** localizar FFmpeg/ffprobe, licença do build, leitura segura | ✅ 0.9.43 |
+| 2 | **Informações do áudio:** painel com duração, codec, taxa, canais, etiquetas, capa; vários arquivos; leitura no worker (`audio_info`) | ✅ 0.9.43 |
+| 3 | **Converter:** MP3, M4A/AAC, FLAC, OGG/Vorbis, Opus, WAV, AIFF; qualidade (bitrate/VBR/nível FLAC); relatório de perdas; publicação atômica; limite próprio de tamanho | ⏳ próximo |
+| 4 | **Metadados:** ver tudo; remover/editar só etiquetas permitidas; capa | |
+| 5 | **Canais:** mono/estéreo, downmix explícito, aviso de clipping/fase | |
+| 6 | **Cortar:** início/fim com onda visual; silêncio só nas pontas | |
+| 7 | **Normalizar volume:** EBU R128 (loudnorm em duas passadas); recusa alvos que causam clipping | |
+| 8 | **Comprimir:** bitrate-alvo, tamanho como melhor esforço | |
+| 9 | **Bleep:** intervalos validados, tom sintético; cópia nova, não é anonimização criptográfica | |
+| 10 | **Visualizador em MP4:** exige codificador de vídeo aprovado; por último | |
+
+### Decisões de interface
+- Enquanto a categoria tem poucas ferramentas, o Áudio usa **cartões** (ativos e «Planejado»). Ao entregar o item 3 passa a **roda em grupos**, respeitando o limite de 8 fatias: **Ler** (Informações, Metadados), **Converter** (Converter, Comprimir), **Ajustar** (Canais, Normalizar), **Editar** (Cortar, Bleep, Visualizador). Os grupos ficam em `tool_registry` (como `PDF_GROUPS`) e o `test_wheel_layout` passa a cobri-los.
+- Ferramenta de leitura (`READONLY_TOOLS`): sem botão «Aplicar» nem «Abrir pasta do resultado».
+- Soltar um áudio no app abre «Informações» direto (enquanto for a única ferramenta).
+
+### Limites conhecidos
+- O motor recusa arquivos acima de 100 MiB (`source_file`); para áudio longo sem perdas (FLAC/WAV) o item 3 define um limite próprio, validado.
+- Só o primeiro fluxo de áudio é descrito; arquivos de vídeo com áudio são aceitos para leitura.
 
 ## Portões
 - **Portão A (por entrega):** testes novos + `test_architecture` + `test_wheel_layout` + suíte completa + item no diagnóstico.

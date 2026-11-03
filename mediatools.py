@@ -240,3 +240,87 @@ def format_duration(seconds: float) -> str:
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
     return f'{hours}:{minutes:02d}:{secs:02d}' if hours else f'{minutes}:{secs:02d}'
+
+
+# ---------------------------------------------------------------------------
+# operações pedidas pela interface (executadas no worker) e texto de apresentação
+# ---------------------------------------------------------------------------
+MAX_PATHS = 100
+CHANNEL_NAMES = {1: 'Mono', 2: 'Estéreo', 6: '5.1', 8: '7.1'}
+TAG_LABELS = {'title': 'Título', 'artist': 'Artista', 'album': 'Álbum', 'album_artist': 'Artista do álbum', 'date': 'Data', 'genre': 'Gênero',
+              'track': 'Faixa', 'disc': 'Disco', 'composer': 'Compositor', 'comment': 'Comentário'}
+
+
+def _plain_source(raw) -> Path:
+    path = Path(str(raw or ''))
+    if not path.is_absolute() or path.is_symlink() or not path.is_file():
+        raise MediaError('Escolha um arquivo de áudio local.')
+    return path
+
+
+def run_op(job: dict, source_file=None) -> dict:
+    """`audio_info`: `paths` (1 a 100) → `{'infos': [info | {'name', 'error'}]}`; um erro de arquivo não derruba a lista.
+
+    `source_file` valida o caminho (o motor passa a sua função; sem ela só se exige caminho absoluto e arquivo comum).
+    """
+    if job.get('op') != 'audio_info':
+        raise MediaError('Operação de áudio desconhecida.')
+    raws = job.get('paths')
+    if not isinstance(raws, list) or not 1 <= len(raws) <= MAX_PATHS:
+        raise MediaError('Escolha de 1 a 100 arquivos de áudio.')
+    check = source_file or _plain_source
+    infos = []
+    for raw in raws:
+        name = Path(str(raw)).name
+        try:
+            info = probe(check(raw))
+            info['name'] = name
+            infos.append(info)
+        except OSError:
+            infos.append({'name': name, 'error': 'O arquivo não pôde ser aberto (foi movido, apagado ou está em uso).'})
+        except ValueError as error:                      # MediaError e ConversionError do motor
+            infos.append({'name': name, 'error': str(error)[:300] or 'Não foi possível ler o áudio.'})
+    return {'infos': infos}
+
+
+def human_size(size: int) -> str:
+    value = float(size)
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if value < 1024 or unit == 'GB':
+            return (f'{value:.0f} {unit}' if unit == 'B' else f'{value:.1f} {unit}').replace('.', ',')
+        value /= 1024
+    return f'{size} B'
+
+
+def describe(info: dict) -> list:
+    """Linhas (rótulo, valor) em texto puro para a interface; os valores vêm do arquivo e são escapados por quem os exibe."""
+    rows = [('Duração', format_duration(info.get('duration', 0)))]
+    codec = info.get('codec_label') or info.get('codec') or '—'
+    if info.get('profile'):
+        codec += f" ({info['profile']})"
+    rows.append(('Codec', codec))
+    rows.append(('Formato do arquivo', info.get('container_label') or info.get('container') or '—'))
+    if info.get('sample_rate'):
+        rows.append(('Taxa de amostragem', f"{info['sample_rate'] / 1000:g} kHz".replace('.', ',')))
+    channels = info.get('channels', 0)
+    if channels:
+        name = CHANNEL_NAMES.get(channels)
+        rows.append(('Canais', f'{name} ({channels})' if name else str(channels)))
+    if info.get('bits_per_sample'):
+        rows.append(('Profundidade', f"{info['bits_per_sample']} bits"))
+    bit_rate = info.get('stream_bit_rate') or info.get('bit_rate')
+    if bit_rate:
+        rows.append(('Taxa de bits', f'{bit_rate // 1000} kb/s'))
+    if info.get('size'):
+        rows.append(('Tamanho', human_size(info['size'])))
+    if info.get('audio_streams', 1) > 1:
+        rows.append(('Fluxos de áudio', f"{info['audio_streams']} (só o primeiro é descrito)"))
+    if info.get('has_video'):
+        rows.append(('Vídeo', 'o arquivo também tem imagem (é um vídeo)'))
+    if info.get('has_cover'):
+        rows.append(('Capa', 'embutida'))
+    if info.get('chapters'):
+        rows.append(('Capítulos', str(info['chapters'])))
+    for key, value in (info.get('tags') or {}).items():
+        rows.append((TAG_LABELS.get(key, key), value))
+    return rows

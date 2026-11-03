@@ -31,6 +31,8 @@ import pdfform
 import pdfredact
 import pdfstamp
 from pdf_stage import PdfStage
+from audio_stage import AudioStage
+import mediatools
 from page_organizer import PageOrganizer
 from visual_tools import (
     ASPECTS, AnnotateView, CanvasView, CropEditor, CropView, ImageStageView, backdrop_preview_pixmap, collage_layout_pixmap, pdf_pages_pixmap,
@@ -41,7 +43,7 @@ from visual_tools import (
 CATEGORIES = OrderedDict([
     ('images', ('Imagens', 'Edição visual e formatos', True)),
     ('video', ('Vídeo', 'Corte, conversão e ajustes', False)),
-    ('audio', ('Áudio', 'Conversão e tratamento', False)),
+    ('audio', ('Áudio', 'Informações e, em breve, conversão e tratamento', True)),
     ('pdf', ('PDF', 'Ver páginas, extrair texto, separar e unir', True)),
     ('documents', ('Documentos', 'Formatos de texto', False)),
     ('slides', ('Slides', 'Apresentações', False)),
@@ -51,9 +53,13 @@ CATEGORIES = OrderedDict([
     ('archives', ('ZIP', 'Compactação e extração', False)),
 ])
 
+AUDIO_INFO = 'Audio Info'                 # ferramenta de leitura: não gera arquivo (0.9.43)
+READONLY_TOOLS = frozenset({AUDIO_INFO})
+AUDIO_SUFFIXES = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '.aiff', '.aif', '.wma'}
+
 PLANNED_TOOLS = {
     'video': [('Cortar trecho', 'Trim com preview'), ('Converter vídeo', 'Formatos e codecs locais'), ('Extrair quadro', 'Snapshot visual'), ('Comprimir vídeo', 'Qualidade e tamanho')],
-    'audio': [('Cortar áudio', 'Seleção visual de trecho'), ('Converter áudio', 'Formatos locais'), ('Normalizar volume', 'Métricas antes/depois'), ('Extrair áudio', 'A partir de vídeo')],
+    'audio': [('Converter áudio', 'MP3, M4A, FLAC, OGG, Opus, WAV e AIFF'), ('Metadados', 'Ver e limpar etiquetas e capa'), ('Canais', 'Mono, estéreo e downmix'), ('Cortar áudio', 'Seleção visual de trecho'), ('Normalizar volume', 'Métricas antes/depois'), ('Comprimir áudio', 'Bitrate e tamanho')],
     'documents': [('Texto para PDF', 'TXT/Markdown'), ('DOCX', 'Importação/exportação controlada'), ('Visualizar documento', 'Prévia local')],
     'slides': [('PPTX ↔ PDF', 'Avisos de fidelidade'), ('Exportar slides', 'Imagens ou PDF')],
     'spreadsheets': [('CSV / TSV', 'Separador e codificação'), ('XLSX / ODS', 'Conversão local'), ('Planilha para PDF', 'Prévia antes de exportar')],
@@ -69,6 +75,9 @@ TOOLS = {
         ('WEBP', 'WebP', 'Converter para WebP'), ('TIFF', 'TIFF', 'Converter para TIFF'),
         ('BMP', 'BMP', 'Converter para BMP'), ('Image → PDF', 'PDF', 'Salvar a imagem em PDF'),
         *[(spec.target, spec.label, spec.tip) for spec in tool_registry.IMAGE_TOOLS],
+    ],
+    'audio': [
+        (AUDIO_INFO, 'Informações', 'Duração, codec, taxa, canais, etiquetas e capa do áudio'),
     ],
     'pdf': [
         ('PDF → Text', 'Extrair texto', 'Exportar o texto das páginas'),
@@ -110,6 +119,7 @@ LABELS = {
     'Image → PDF': 'Imagem → PDF', **{spec.target: spec.panel_title for spec in tool_registry.IMAGE_TOOLS},
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Imagens embutidas no PDF', 'PDF → Images': 'Páginas do PDF em imagens',
     'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF', 'Stamp PDF': 'Numerar e carimbar o PDF', 'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Compress PDF': 'Comprimir PDF', 'Clean PDF': 'Metadados e cópia limpa do PDF', 'PDF OCR → PDF': 'PDF digitalizado → PDF pesquisável (OCR)', 'PDF OCR → Text': 'PDF digitalizado → texto (OCR)',
+    AUDIO_INFO: 'Informações do áudio',
     'Split PDF': 'Dividir e extrair páginas do PDF', 'Organize PDF': 'Organizar páginas do PDF', 'Merge PDFs': 'Unir PDFs',
 }
 FUTURE_SUFFIXES = {
@@ -118,7 +128,7 @@ FUTURE_SUFFIXES = {
     '.ods': 'spreadsheets', '.epub': 'epub', '.srt': 'subtitles', '.vtt': 'subtitles', '.zip': 'archives',
 }
 # stage: índices da pilha de prévia
-STAGE_MESSAGE, STAGE_CROP, STAGE_ANNOTATE, STAGE_CANVAS, STAGE_STATIC, STAGE_FILES, STAGE_PDF, STAGE_ORGANIZE, STAGE_REDACT, STAGE_FORM = range(10)
+STAGE_MESSAGE, STAGE_CROP, STAGE_ANNOTATE, STAGE_CANVAS, STAGE_STATIC, STAGE_FILES, STAGE_PDF, STAGE_ORGANIZE, STAGE_REDACT, STAGE_FORM, STAGE_AUDIO = range(11)
 ORDERED_TARGETS = ('Collage → PNG', 'Images → One PDF')      # ferramentas que juntam várias imagens na ordem da lista
 
 
@@ -366,8 +376,9 @@ class FeaturePanel(QMainWindow):
         self.redact_stage = PdfStage(selectable=True)      # Tarjar (0.9.40): a página aceita seleção de áreas
         self.form_stage = PdfStage(selectable=True)        # Preencher e assinar (0.9.41): a página aceita a área da assinatura
         self.form_stage.page_view.committed_fill = False
+        self.audio_stage = AudioStage()              # Áudio (0.9.43): informações do arquivo; a leitura roda no worker
         self.organizer = PageOrganizer()             # Organizar páginas (0.9.33): miniaturas que se arrastam, giram, somem e se duplicam
-        for widget in (self.preview_image, self.crop_preview, self.annotate_preview, self.canvas_preview, self.static_preview, self.file_preview, self.pdf_stage, self.organizer, self.redact_stage, self.form_stage):
+        for widget in (self.preview_image, self.crop_preview, self.annotate_preview, self.canvas_preview, self.static_preview, self.file_preview, self.pdf_stage, self.organizer, self.redact_stage, self.form_stage, self.audio_stage):
             self.stage.addWidget(widget)
         preview_layout.addWidget(self.stage, 1)
         body.addWidget(self.preview_frame, 3)
@@ -809,17 +820,24 @@ class FeaturePanel(QMainWindow):
             self._build_wheels(category)
             self.category_body.setCurrentWidget(self.wheels_scroll)
         else:
+            ready = [(target, label, description) for target, label, description in TOOLS.get(category, [])]
             planned = PLANNED_TOOLS.get(category, [])
             columns = 3 if self.size().width() >= 960 else 2
-            for index, (label, description) in enumerate(planned):
+            for index, (target, label, description) in enumerate(ready):          # ferramentas já disponíveis (Áudio: Informações)
+                card = QPushButton(f'{label}\n{description}')
+                card.setObjectName('ToolCardButton'); card.setMinimumHeight(78)
+                card.clicked.connect(lambda checked=False, t=target: self.select_tool(t))
+                self.tool_grid.addWidget(card, index // columns, index % columns)
+            offset = len(ready)
+            for index, (label, description) in enumerate(planned, start=offset):
                 card = QPushButton(f'{label}\n{description} · Planejado')
                 card.setObjectName('ToolCardButton'); card.setMinimumHeight(78); card.setEnabled(False)
                 card.setToolTip('Este recurso ainda não está disponível e não executa operações nesta versão.')
                 self.tool_grid.addWidget(card, index // columns, index % columns)
-            if not planned:
+            if not planned and not ready:
                 empty = QLabel('Ainda não há ferramentas nesta categoria. Ela será ativada quando o respectivo motor local estiver pronto.')
                 empty.setObjectName('Muted'); empty.setWordWrap(True); self.tool_grid.addWidget(empty, 0, 0)
-            self.tool_grid.setRowStretch(max(1, (len(planned) + columns - 1) // columns), 1)
+            self.tool_grid.setRowStretch(max(1, (len(planned) + offset + columns - 1) // columns), 1)
             self.category_body.setCurrentWidget(self.tools_scroll)
         self.pages.setCurrentWidget(self.category_page)
 
@@ -893,7 +911,7 @@ class FeaturePanel(QMainWindow):
     def select_tool(self, target: str):
         self._clear_passwords()
         self._redact_reset(); self._form_reset()
-        if target not in OPERATIONS:
+        if target not in OPERATIONS and target not in READONLY_TOOLS:
             return
         self.selected_tool = target
         self.operation.blockSignals(True)
@@ -975,6 +993,18 @@ class FeaturePanel(QMainWindow):
         for control in (self.crop_x, self.crop_y, self.crop_width, self.crop_height):
             control.setValue(0)
         self.crop_help.setText('Arraste na imagem para definir a área.')
+        if target == AUDIO_INFO:
+            self.file_preview.clear()
+            self.pdf_stage.show_files([])
+            audios = [path for path in self.files if Path(path).suffix.lower() in AUDIO_SUFFIXES or Path(path).suffix.lower() in ('.mp4', '.mkv', '.mov', '.webm')]
+            if audios:
+                if self.audio_stage.paths != audios:
+                    self.audio_stage.show_files(audios)
+                self.stage.setCurrentIndex(STAGE_AUDIO)
+            else:
+                self.audio_stage.show_files([])
+                self._stage_message('Abra um arquivo de áudio para ver as informações.')
+            return
         if target not in IMAGE_TARGETS:
             self.file_preview.clear()
             pdfs = [path for path in self.files if Path(path).suffix.lower() == '.pdf']
@@ -1241,6 +1271,8 @@ class FeaturePanel(QMainWindow):
             folder_mode = self._folder_mode(target)
             visible = (*visible, *(('nfolder',) if target in RENAMEABLE_TARGETS and target not in ORDERED_TARGETS and len(self.files) > 1 else ()), 'nname', 'nexample', *(('nstart',) if folder_mode else ()), *(('nstart', 'ndigits') if '{n}' in self.rename_pattern.text() and not folder_mode else ()), *(('ndigits',) if folder_mode and '{n}' in self.rename_pattern.text() else ()))
         self.run_button.setEnabled(True)
+        self.run_button.setVisible(target not in READONLY_TOOLS)          # ferramentas de leitura não têm o que aplicar nem pasta de resultado
+        self.open_button.setVisible(target not in READONLY_TOOLS)
         for key, widget in self.form_fields.items():
             shown = key in visible
             self.settings_form.setRowVisible(widget, shown)
@@ -1280,6 +1312,7 @@ class FeaturePanel(QMainWindow):
             'PDF → Images': 'Cada página vira uma imagem numerada («pagina-001») numa pasta nova ao lado do PDF. Resolução maior dá mais nitidez e arquivos bem maiores (limite de 40 megapixels por página). Texto e desenhos viram pixels; formulários e anotações não são desenhados. O PDF original não muda.',
             'Split PDF': 'Escolha como dividir: uma página por PDF, partes de N páginas, grupos de páginas (1-3; 4-6; 7-) ou extrair só algumas páginas para um PDF novo. Várias partes vão numeradas para uma pasta nova ao lado do original, que não muda. Anexos, formulários e assinaturas não são preservados.',
             'Organize PDF': 'Arraste as miniaturas para mudar a ordem; selecione uma ou várias (Ctrl ou Shift) para girar, duplicar, mover ou excluir. O resultado é um PDF novo, «<nome>-organizado.pdf»; o original não muda. Marcadores, anexos, formulários e assinaturas não são preservados.',
+            AUDIO_INFO: 'Mostra o que o arquivo de áudio contém: duração, codec, taxa de amostragem, canais, taxa de bits, etiquetas e capa. É só leitura: nada é gravado nem alterado. A leitura é feita no seu computador, sem internet; a extensão do arquivo não decide o formato. Por enquanto o limite é de 100 MiB por arquivo.',
             'Merge PDFs': 'Os PDFs são unidos na ordem da lista (arraste ou use Subir e Descer). Para usar só parte de um arquivo, selecione-o e escreva as páginas, como 1-3,7. Cada arquivo ganha um marcador com o nome dele; formulários, anexos e assinaturas não são preservados. Os originais não mudam.',
         }
         self.tool_hint.setText(hints.get(target, 'A operação cria um novo arquivo; o original fica intacto.'))
@@ -2837,10 +2870,12 @@ class FeaturePanel(QMainWindow):
             suffix = f' +{len(self.files) - 2}' if len(self.files) > 2 else ''
             self.files_label.setText('  ·  '.join(shown) + suffix)
             ext = Path(self.files[0]).suffix.lower()
-            category = 'images' if ext in IMAGE_SUFFIXES else ('pdf' if ext == '.pdf' else None)
+            category = 'images' if ext in IMAGE_SUFFIXES else ('pdf' if ext == '.pdf' else ('audio' if ext in AUDIO_SUFFIXES else None))
             category = category or FUTURE_SUFFIXES.get(ext)
             if category:
                 self.select_category(category)
+                if category == 'audio' and not target and ext in AUDIO_SUFFIXES:
+                    target = AUDIO_INFO          # por ora a única ferramenta de áudio é «Informações»: abre direto
             for control in (self.crop_x, self.crop_y, self.crop_width, self.crop_height):
                 control.setValue(0)
         else:
@@ -3176,7 +3211,7 @@ class FeaturePanel(QMainWindow):
 
     def closeEvent(self, event):
         if self.allow_close:
-            self.pdf_stage.shutdown(); self.organizer.shutdown()
+            self.pdf_stage.shutdown(); self.organizer.shutdown(); self.audio_stage.shutdown()
             event.accept()
         else:
             self.hide()

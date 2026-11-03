@@ -95,6 +95,10 @@ def _run_job(job,cancel=None,timeout=180,command=None):
             stop(proc)
             winjob.release(job_handle)
 
+def run_media_op(job,cancel=None,timeout=60,command=None):
+    """Leitura de áudio para a interface (`audio_info` → `{'infos': [...]}`) em worker descartável; nada é gravado ao lado dos arquivos do usuário."""
+    return _run_job(dict(job),cancel,timeout,command)
+
 def run_pdf_op(job,cancel=None,timeout=60,command=None):
     """Leitura de PDF para a interface (informações e prévia) em worker descartável, sem abrir o PDF no processo da interface.
 

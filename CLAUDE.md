@@ -37,7 +37,7 @@ Conversor/ferramentas de arquivos **offline** para Windows 10/11 (também roda e
 1. `git switch -c item-NN-nome` → implementar → `./dev.sh test` ou `.\dev.ps1 test` → PR → CI verde → merge.
 2. Atualizar: README (uma linha), RELEASE (cabeçalho novo), `docs/ARCHITECTURE.md` (item numerado), plano da categoria, checklist do Windows. Registro de continuidade no Project do Claude.
 
-- **Categoria atual: Áudio** (`docs/PLANO-CATEGORIA-AUDIO.md`). Item 1 (base de mídia, `mediatools.py`) entregue; próximo: item 2 (painel e informações).
+- **Categoria atual: Áudio** (`docs/PLANO-CATEGORIA-AUDIO.md`). Itens 1 (base de mídia, `mediatools.py`) e 2 (informações do áudio, `audio_stage.py`) entregues; próximo: item 3 (converter), quando a categoria passa a roda em grupos.
 
 ## Dependências e ambiente
 - `python tools/doctor.py` diagnostica o ambiente (obrigatórios e opcionais). Matriz completa em `docs/DEPENDENCIAS.md`.
