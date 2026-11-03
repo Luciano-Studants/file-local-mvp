@@ -59,7 +59,7 @@ jobs:
           exit $status
       - name: Guardar o log completo dos testes
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-log-${{ matrix.os }}
           path: test.log
@@ -72,7 +72,7 @@ jobs:
         run: python tools/quality_suite.py --only pdf --fast --out quality-report
       - name: Guardar o relatório de qualidade
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-report-${{ matrix.os }}
           path: quality-report
@@ -98,7 +98,7 @@ jobs:
           pip-licenses --format=markdown --with-urls > licencas.md
           cat licencas.md
           if grep -i "AGPL" licencas.md; then echo "Licença AGPL encontrada; revisar docs/DEPENDENCIAS.md"; exit 1; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: licencas
           path: licencas.md
