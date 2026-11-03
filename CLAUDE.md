@@ -7,6 +7,7 @@ Conversor/ferramentas de arquivos **offline** para Windows 10/11 (também roda e
 - 100% offline: nenhuma chamada de rede em código de conversão.
 - Licenças: **não** usar PyMuPDF nem Ghostscript (AGPL). Dependência nova → `requirements.txt` com versão fixa, texto da licença em `licenses/`, linha em `THIRD_PARTY_NOTICES.md` e `licenses/SOURCES.md`.
 - Senhas nunca vão para relatório, histórico, mensagem de erro nem linha de comando.
+- **Design das rodas (menus radiais):** nenhuma roda passa de 8 fatias (a sub-roda já conta o «Voltar») nem usa rótulo com mais de 13 caracteres. Ferramenta nova entra num **grupo** (`tool_registry.PDF_GROUPS` para PDF, `GROUPS` para imagens), nunca solta no primeiro nível se isso estourar o limite. `tests/test_wheel_layout.py` barra isso; confira também visualmente (renderizar a roda) quando mexer em rótulos.
 - Uma funcionalidade por entrega (branch/PR por item). Falou «próximo passo» → próximo item do plano em `docs/PLANO-CATEGORIA-*.md`.
 
 ## Arquitetura (resumo; detalhes em `docs/ARCHITECTURE.md`)

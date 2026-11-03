@@ -24,7 +24,7 @@ import engine as engine_module
 from engine import BG_DEFAULT_MODEL, BG_TARGET, bg_options_from, VECTOR_INPUTS, VECTOR_MAX_WIDTH, set_vector_width, ConversionError, IMAGE_INPUTS, IMAGE_OUTPUTS, OUTPUT_FORMATS, RENAMEABLE_TARGETS, TOOL_SUFFIX, batch_rename_options, rename_options_from, rename_stem, RESIZE_MAX_SIDE, WATERMARK_POSITIONS, resize_target_size, SHAPE_KINDS, SHAPE_MAX_ITEMS, levels_image, levels_options_from, levels_resolve, luminance_histogram, shape_items_from, shapes_image, sharpen_image, sharpen_options_from, watermark_image, watermark_options_from
 from engine import BACKDROPS, BACKDROP_RATIOS, COLLAGE_MAX, COLLAGE_MIN, OPERATIONS, VERSION, backdrop_layout, collage_layout, adjust_image, inspect_metadata, jpeg_bytes, open_image, source_file
 from icons import category_icon
-from radial_menu import RadialAction, RadialWheel, image_tool_actions
+from radial_menu import RadialAction, RadialWheel, image_tool_actions, pdf_tool_actions
 from widgets import ChipGroup, HistogramView, SliderRow, swatch_pixmap
 import pdfinfo
 import pdfform
@@ -96,7 +96,7 @@ WHEEL_COLUMNS = {
         ('Shift + F9', 'Ferramentas do arquivo', tool_registry.wheel_layout()),
     ],
     'pdf': [
-        ('Shift', 'Operações de PDF', ['PDF → Text', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'PDF → Images', 'Split PDF', 'Organize PDF', 'Merge PDFs', 'Stamp PDF', 'Redact PDF', 'Fill PDF', 'Compress PDF', 'Clean PDF', 'Protect PDF', 'Unprotect PDF']),
+        ('Shift', 'Operações de PDF', tool_registry.pdf_wheel_layout()),
     ],
 }
 
@@ -848,7 +848,12 @@ class FeaturePanel(QMainWindow):
             column_layout.addWidget(key, 0, Qt.AlignmentFlag.AlignHCenter)
             sub = QLabel(subtitle); sub.setObjectName('Muted'); sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
             column_layout.addWidget(sub)
-            actions = image_tool_actions(engine_targets=True) if targets and targets[0].startswith(tool_registry.GROUP_PREFIX) else [RadialAction(descriptions[target][0], target, descriptions[target][1]) for target in targets]
+            if targets and targets[0].startswith(tool_registry.GROUP_PREFIX):
+                actions = image_tool_actions(engine_targets=True)
+            elif targets and targets[0].startswith(tool_registry.PDF_GROUP_PREFIX):
+                actions = pdf_tool_actions()
+            else:
+                actions = [RadialAction(descriptions[target][0], target, descriptions[target][1]) for target in targets]
             enabled, reason = self._capability_for(targets[0])
             wheel = RadialWheel(actions, 'Escolha', 330, disabled=() if enabled else range(len(actions)))
             wheel.setToolTip('' if enabled else reason)

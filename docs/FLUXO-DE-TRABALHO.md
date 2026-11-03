@@ -16,5 +16,8 @@
 ## Cada entrega
 `git switch -c item-NN-nome` → mudanças → commit → push → abrir PR → CI verde → merge na `main`.
 
+## Menu radial: regra de design
+Cada funcionalidade nova que aparece numa roda precisa respeitar o limite de 8 fatias por nível e rótulos curtos; se não couber, vai para um grupo (sub-roda). O teste `test_wheel_layout` falha se alguma roda estourar.
+
 ## Windows
 O job do Windows agora bloqueia o merge como o do Linux (ficou verde em 02/11/2026). Ele usa uma pasta temporária de caminho longo (`runner.temp`) para evitar o nome curto `RUNNER~1`.

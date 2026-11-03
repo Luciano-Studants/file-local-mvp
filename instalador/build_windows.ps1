@@ -1,4 +1,4 @@
-<#
+﻿<#
  Gera o pacote do Arquivo Local para Windows: testes, suíte de qualidade, PyInstaller, verificação e (se o Inno Setup estiver instalado) o instalador.
  Uso (PowerShell, na pasta Desktop):   powershell -ExecutionPolicy Bypass -File instalador\build_windows.ps1
  Requisitos: Windows 10/11 64 bits, Python 3.12 64 bits (python.org), internet só para o pip. Opcional: Inno Setup 6 e a pasta «tesseract» ao lado do package.py.

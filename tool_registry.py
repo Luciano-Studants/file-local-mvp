@@ -153,6 +153,60 @@ def flat_targets(entries) -> list[str]:
     return result
 
 
+# ---------------------------------------------------------------------------
+# Roda do PDF (0.9.43): as 15 operações ficam em grupos com sub-roda, como nas imagens.
+# REGRA DE DESIGN: uma roda nunca passa de MAX_SLICES fatias (a sub-roda já conta o «Voltar») e cada rótulo cabe em
+# MAX_LABEL caracteres. Operação nova de PDF entra num grupo daqui (ou num grupo novo, se o primeiro nível ainda couber);
+# tests/test_wheel_layout.py barra qualquer roda que estoure o limite.
+# ---------------------------------------------------------------------------
+MAX_SLICES = 8
+MAX_LABEL = 13
+PDF_GROUP_PREFIX = '__pdfgroup_'
+
+# id → (rótulo, descrição, ícone, [(alvo, rótulo curto, descrição, ícone)])
+PDF_GROUPS = {
+    'read': ('Ler', 'Extrair texto e imagens, ou reconhecer um PDF digitalizado (OCR)', 'text', [
+        ('PDF → Text', 'Texto', 'Exportar o texto das páginas', 'text'),
+        ('Extract PDF Images', 'Imagens', 'Extrair as imagens embutidas', 'image'),
+        ('PDF OCR → PDF', 'OCR → PDF', 'Reconhecer um PDF digitalizado e gerar um PDF pesquisável', 'ocr'),
+        ('PDF OCR → Text', 'OCR → texto', 'Reconhecer o texto de um PDF digitalizado', 'ocr'),
+    ]),
+    'pages': ('Páginas', 'Dividir, unir, reordenar ou salvar as páginas como imagens', 'onepdf', [
+        ('PDF → Images', 'Em imagens', 'Salvar cada página como imagem', 'image'),
+        ('Split PDF', 'Dividir', 'Separar em partes ou extrair páginas', 'split'),
+        ('Organize PDF', 'Organizar', 'Girar, excluir, duplicar e reordenar', 'onepdf'),
+        ('Merge PDFs', 'Unir', 'Combinar dois ou mais arquivos', 'merge'),
+    ]),
+    'edit': ('Editar', 'Numerar e carimbar, preencher e assinar, tarjar conteúdo', 'annotate', [
+        ('Stamp PDF', 'Carimbar', 'Números de página, texto e marca d\'água', 'watermark'),
+        ('Fill PDF', 'Preencher', 'Campos do formulário e imagem de assinatura', 'annotate'),
+        ('Redact PDF', 'Tarjar', 'Cobrir áreas, termos e dados pessoais', 'redact'),
+    ]),
+    'optimize': ('Otimizar', 'Reduzir o tamanho e limpar metadados', 'compress', [
+        ('Compress PDF', 'Comprimir', 'Reduzir o tamanho do arquivo', 'compress'),
+        ('Clean PDF', 'Metadados', 'Ver metadados e gerar uma cópia limpa', 'metadata'),
+    ]),
+    'secure': ('Senha', 'Proteger com senha ou remover a senha', 'lock', [
+        ('Protect PDF', 'Proteger', 'Criptografar com senha (AES-256)', 'lock'),
+        ('Unprotect PDF', 'Remover senha', 'Gerar uma cópia sem senha', 'lock'),
+    ]),
+}
+
+
+def pdf_group_action(group: str) -> str:
+    return f'{PDF_GROUP_PREFIX}{group}__'
+
+
+def pdf_wheel_layout() -> list[str]:
+    """Fatias de primeiro nível da roda do PDF (ids de grupo)."""
+    return [pdf_group_action(group) for group in PDF_GROUPS]
+
+
+def pdf_flat_targets() -> list[str]:
+    """Todas as operações de PDF alcançáveis pela roda, na ordem dos grupos."""
+    return [target for _l, _t, _i, members in PDF_GROUPS.values() for target, *_rest in members]
+
+
 BY_TARGET = {spec.target: spec for spec in IMAGE_TOOLS}
 BY_ACTION = {spec.action: spec for spec in IMAGE_TOOLS}
 TARGETS = tuple(spec.target for spec in IMAGE_TOOLS)
