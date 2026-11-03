@@ -20,6 +20,11 @@ jobs:
       - name: Inno Setup
         run: choco install innosetup -y --no-progress
         shell: powershell
+      - name: Tesseract (OCR embutido no pacote)
+        shell: powershell
+        run: |
+          choco install tesseract -y --no-progress
+          powershell -ExecutionPolicy Bypass -File tools\stage_tesseract.ps1
       - name: Roteiro de build (testes, qualidade, PyInstaller, verificação, instalador)
         run: powershell -ExecutionPolicy Bypass -File instalador\build_windows.ps1
       - name: Guardar os arquivos gerados

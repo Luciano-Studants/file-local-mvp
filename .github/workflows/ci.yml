@@ -31,9 +31,17 @@ jobs:
           cache: pip
       - name: Bibliotecas do Qt (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0 fonts-dejavu-core
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0 fonts-dejavu-core tesseract-ocr
+      - name: Tesseract (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          choco install tesseract -y --no-progress
+          "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Dependências
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Diagnóstico do ambiente
+        run: python tools/doctor.py
       - name: Testes automáticos
         shell: bash
         env:
@@ -69,3 +77,28 @@ jobs:
           name: quality-report-${{ matrix.os }}
           path: quality-report
           if-no-files-found: ignore
+
+  dependencias:
+    name: Dependências (consistência, vulnerabilidades, licenças)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Consistência (pip check)
+        run: python -m pip check
+      - name: Vulnerabilidades conhecidas (pip-audit)
+        continue-on-error: true      # informativo: vira bloqueante quando não houver pendências
+        run: pip-audit -r requirements.txt
+      - name: Licenças (bloqueia AGPL)
+        run: |
+          pip-licenses --format=markdown --with-urls > licencas.md
+          cat licencas.md
+          if grep -i "AGPL" licencas.md; then echo "Licença AGPL encontrada; revisar docs/DEPENDENCIAS.md"; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: licencas
+          path: licencas.md

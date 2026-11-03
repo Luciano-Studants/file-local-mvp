@@ -17,7 +17,7 @@ Step 'Criando o ambiente .venv-build e instalando as dependências'
 if (-not (Test-Path .venv-build)) { & python -m venv .venv-build }
 $py = Join-Path (Get-Location) '.venv-build\Scripts\python.exe'
 & $py -m pip install --upgrade pip
-& $py -m pip install -r requirements.txt pyinstaller
+& $py -m pip install -r requirements.txt -r requirements-dev.txt
 if ($LASTEXITCODE -ne 0) { throw 'pip falhou' }
 
 Step 'Rodando os testes automáticos'
