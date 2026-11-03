@@ -34,4 +34,6 @@ class DoctorTests(unittest.TestCase):
         self.assertEqual([n for n, good, _ in required if not good], [])
 
     def test_main_exit_code(self):
-        self.assertEqual(doctor.main([]), 0)
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(doctor.main([]), 0)
