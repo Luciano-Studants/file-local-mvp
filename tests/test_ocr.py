@@ -24,7 +24,18 @@ from engine import ConversionError, convert, loss_report, ocr_options_from, ocr_
 from tray_app import FeaturePanel, JobController
 
 READY = ocr.status()[0] and {'por', 'eng'} <= ocr.available_languages()
-FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+def _find_font():
+    """Fonte com acentos em qualquer sistema (o Pillow também procura nas pastas de fontes do sistema pelo nome)."""
+    for candidate in ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 'DejaVuSans.ttf', 'segoeui.ttf', 'arial.ttf', 'Arial.ttf'):
+        try:
+            ImageFont.truetype(candidate, 20)
+            return candidate
+        except OSError:
+            continue
+    return '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+
+
+FONT = _find_font()
 LINES = ['Conversão offline de arquivos', 'Olá, mundo! Ação e emoção: 123,45', 'Arquivo Local — versão 0.9.22']
 
 
@@ -155,7 +166,7 @@ class OcrFailureTests(unittest.TestCase):
         self.assertEqual(list(self.out.iterdir()), [])
 
     def test_tesseract_failure_is_reported_in_portuguese(self):
-        with patch.dict(ocr._cache, {'exe': '/usr/bin/false', 'langs': {'por', 'eng'}}, clear=True):
+        with patch.dict(ocr._cache, {'exe': sys.executable, 'langs': {'por', 'eng'}}, clear=True):      # um programa que sempre falha com estes argumentos (vale no Windows e no Linux)
             with self.assertRaises(ConversionError) as caught: convert({'paths': [str(self.source)], 'target': 'OCR → Text', 'output': str(self.out)})
             self.assertIn('não conseguiu reconhecer', str(caught.exception))
         self.assertEqual(list(self.out.iterdir()), [])

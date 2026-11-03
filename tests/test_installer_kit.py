@@ -23,7 +23,7 @@ class InstallerKitTests(unittest.TestCase):
         self.assertNotIn('PrivilegesRequired=admin', self.iss)
         roots = set(re.findall(r'^Root:\s*(\w+)', self.iss, re.M))
         self.assertEqual(roots, {'HKCU'})
-        self.assertIn('x64compatible', self.iss); self.assertIn('LicenseFile=..\\..\\LICENSE', self.iss)
+        self.assertIn('x64compatible', self.iss); self.assertIn('LicenseFile=..\\LICENSE', self.iss)
 
     def test_optional_tasks_are_off_by_default_and_registry_is_removed_on_uninstall(self):
         for task in ('startup', 'contextmenu'):

@@ -83,7 +83,7 @@ class EngineTests(Base):
     def test_rotated_pages_draw_where_they_should(self):
         out = Path(convert({'paths': [str(self.pdf(pages=4, rotations=(0, 90, 180, 270)))], 'target': ST, 'stamp_text': 'MARCA', 'stamp_position': 'bc', 'stamp_size': 30})[0])
         import pypdfium2 as pdfium
-        document = pdfium.PdfDocument(str(out))
+        document = pdfium.PdfDocument(str(out)); self.addCleanup(document.close)      # no Windows um arquivo aberto não pode ser apagado
         for index in range(4):
             image = document[index].render(scale=0.5).to_pil().convert('L'); width, height = image.size
             dark = [(x, y) for y in range(height) for x in range(width) if image.getpixel((x, y)) < 128]

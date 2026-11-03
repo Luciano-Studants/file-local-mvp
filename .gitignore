@@ -4,3 +4,9 @@ __pycache__/
 build/
 dist/
 *.spec
+.venv-build/
+.pytest_cache/
+quality-report/
+dist/relatorio-qualidade/
+*.zip
+.env

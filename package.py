@@ -31,8 +31,8 @@ subprocess.run([
 dest = root / 'dist' / 'ArquivoLocal'
 licenses = dest / 'licenses'
 licenses.mkdir(exist_ok=True)
-shutil.copyfile(root.parent / 'LICENSE', dest / 'LICENSE')
-shutil.copyfile(root.parent / 'LICENSE', licenses / 'GPL-3.0.txt')
+shutil.copyfile(root / 'LICENSE', dest / 'LICENSE')
+shutil.copyfile(root / 'LICENSE', licenses / 'GPL-3.0.txt')
 shutil.copyfile(root / 'README.md', dest / 'LEIA-ME.md')
 shutil.copyfile(root / 'NOTICE', dest / 'NOTICE')
 shutil.copyfile(root / 'THIRD_PARTY_NOTICES.md', dest / 'THIRD_PARTY_NOTICES.md')
@@ -40,11 +40,11 @@ shutil.copytree(root / 'licenses', licenses / 'explicit', dirs_exist_ok=True)
 
 source = dest / 'source' / 'Desktop'
 source.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(root.parent / 'LICENSE', dest / 'source' / 'LICENSE')
+shutil.copyfile(root / 'LICENSE', dest / 'source' / 'LICENSE')
 shutil.copyfile(root / 'NOTICE', dest / 'source' / 'NOTICE')
 shutil.copyfile(root / 'THIRD_PARTY_NOTICES.md', dest / 'source' / 'THIRD_PARTY_NOTICES.md')
-shutil.copyfile(root.parent / 'PROJECT_GOALS.md', dest / 'source' / 'PROJECT_GOALS.md')
-shutil.copyfile(root.parent / 'IMPLEMENTATION_ROADMAP.md', dest / 'source' / 'IMPLEMENTATION_ROADMAP.md')
+shutil.copyfile(root / 'docs' / 'PROJECT_GOALS.md', dest / 'source' / 'PROJECT_GOALS.md')
+shutil.copyfile(root / 'docs' / 'IMPLEMENTATION_ROADMAP.md', dest / 'source' / 'IMPLEMENTATION_ROADMAP.md')
 shutil.copyfile(root / 'README.md', source / 'README.md')
 shutil.copyfile(root / 'RELEASE.md', source / 'RELEASE.md')
 shutil.copyfile(root / 'NOTICE', source / 'NOTICE')
@@ -58,6 +58,7 @@ shutil.copytree(root / 'instalador', source / 'instalador', dirs_exist_ok=True) 
 for path in root.glob('*.py'):
     shutil.copyfile(path, source / path.name)
 shutil.copyfile(root / 'requirements.txt', source / 'requirements.txt')
+shutil.copyfile(root / 'requirements-dev.txt', source / 'requirements-dev.txt')
 
 versions = {}
 for name in ['Pillow', 'pypdf', 'cryptography', 'cffi', 'pycparser', 'resvg-py', 'pillow-heif', 'pypdfium2', 'numpy', 'onnxruntime', 'PySide6-Essentials', 'shiboken6', 'pywin32', 'pyinstaller']:

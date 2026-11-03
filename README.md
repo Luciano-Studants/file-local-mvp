@@ -4,6 +4,8 @@ Utilitário desktop experimental, local e Windows-only, baseado educacionalmente
 
 > **Estado:** código-fonte experimental. O desenvolvimento e os testes automatizados foram realizados no Sandbox Linux; integração real Windows 10 Pro 22H2, compilação PyInstaller, Defender e SmartScreen continuam sem validação. A meta de distribuição online gratuita para Windows 10 é futura, não uma release pública.
 
+> **Desenvolvimento:** veja `CLAUDE.md` (regras e comandos) e `docs/FLUXO-DE-TRABALHO.md` (Git, CI e como testar na sua máquina: `.\dev.ps1 setup`, `.\dev.ps1 run`, `.\dev.ps1 test`).
+
 ## Experiência
 
 1. Abra pelo ícone da bandeja. O painel inicia na escolha de categoria; também é possível abrir um arquivo pelo botão **Abrir arquivo**.
