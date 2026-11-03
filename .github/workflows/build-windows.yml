@@ -13,7 +13,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'      # o roteiro instalador\build_windows.ps1 exige 3.12 de 64 bits
