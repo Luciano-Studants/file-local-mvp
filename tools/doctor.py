@@ -62,6 +62,23 @@ def find_tesseract():
         sys.path.pop(0)
 
 
+def ffmpeg_item():
+    """FFmpeg/ffprobe (categoria Áudio): versão, licença do build e formatos de saída disponíveis."""
+    sys.path.insert(0, str(ROOT))
+    try:
+        import mediatools
+        mediatools.reset_cache()
+        ok, reason = mediatools.capability()
+        if not ok:
+            return ('FFmpeg (categoria Áudio)', False, reason + ' Windows: winget install Gyan.FFmpeg')
+        report = mediatools.capability_report()
+        return ('FFmpeg (categoria Áudio)', True, f"{reason} {report['note']}")
+    except Exception as error:   # noqa: BLE001 - diagnóstico não pode quebrar
+        return ('FFmpeg (categoria Áudio)', False, f'não foi possível verificar: {error}')
+    finally:
+        sys.path.pop(0)
+
+
 def run():
     required, optional = [], []
     ok = sys.version_info[:2] in ((3, 12), (3, 13))
@@ -74,11 +91,11 @@ def run():
     tessdata = ROOT / 'tessdata'
     langs = sorted(p.stem for p in tessdata.glob('*.traineddata')) if tessdata.is_dir() else []
     optional.append(('Dados de idioma do OCR (tessdata/)', {'eng', 'por'} <= set(langs), ', '.join(langs) or 'ausentes'))
+    optional.append(ffmpeg_item())
     for label, command, hint in (
-        ('FFmpeg (categorias de áudio/vídeo, futuro)', 'ffmpeg', 'winget install Gyan.FFmpeg'),
         ('LibreOffice (documentos, opcional)', 'soffice', 'winget install TheDocumentFoundation.LibreOffice'),
     ):
-        version = tool_version(command, ('-version',) if command == 'ffmpeg' else ('--version',))
+        version = tool_version(command, ('--version',))
         optional.append((label, bool(version), version or hint))
     if os.name == 'nt':
         inno = shutil.which('iscc') or next((p for p in (r'C:\Program Files (x86)\Inno Setup 6\ISCC.exe', r'C:\Program Files\Inno Setup 6\ISCC.exe') if Path(p).is_file()), None)

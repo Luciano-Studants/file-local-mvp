@@ -22,7 +22,7 @@ Ferramentas de desenvolvimento (requirements-dev.txt): PyInstaller (empacotament
 |---|---|---|
 | Tesseract (OCR) | CI instala (apt / choco); o build do Windows copia para `tesseract\` via `tools\stage_tesseract.ps1`; dados de idioma `eng` e `por` vêm em `tessdata\` | PDF › OCR; revisar licenças das DLLs copiadas (`tesseract\COPIADOS.txt`) |
 | Inno Setup 6 | CI instala por choco | Instalador do Windows |
-| FFmpeg/ffprobe | Ainda não usado | Áudio/Vídeo: build LGPL fixado (versão, flags e licença registradas); HEVC/x265 depende de decisão jurídica |
+| FFmpeg/ffprobe | **Em uso (0.9.43)**: `mediatools.py` localiza, confere a licença do build e lê arquivos. CI instala (apt / choco, build GPL só para testes). O pacote só aceita build **LGPL** na pasta `ffmpeg\` | Áudio agora, Vídeo depois; HEVC/x265 depende de decisão jurídica |
 | LibreOffice | Opcional, ainda não usado | Documentos (fallback); `soffice` já está na lista de permitidos |
 
 ## Planejadas por categoria (ainda NÃO instaladas — instalar quando a categoria começar)

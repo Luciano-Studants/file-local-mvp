@@ -19,10 +19,19 @@ def _modules_available(modules: tuple[str, ...]) -> Capability:
     return True, 'Dependências locais carregadas.'
 
 
+def _audio_capability() -> Capability:
+    try:
+        import mediatools
+        return mediatools.capability()
+    except Exception as error:      # noqa: BLE001 - a sonda nunca derruba o programa
+        return False, f'Áudio indisponível: {error}'
+
+
 def probe_capabilities() -> dict[str, Capability]:
     """Probe installed modules and fixed Windows tools; performs no network or file conversion."""
     image_ok, image_reason = _modules_available(('PIL.Image',))
     pdf_ok, pdf_reason = _modules_available(('pypdf',))
+    audio_ok, audio_reason = _audio_capability()
     if os.name == 'nt':
         shell_ok, shell_reason = _modules_available(('pythoncom', 'win32com.client', 'win32gui'))
         local_app_data = os.environ.get('LOCALAPPDATA', '')
@@ -37,6 +46,7 @@ def probe_capabilities() -> dict[str, Capability]:
     return {
         'images': (image_ok, image_reason),
         'pdf': (pdf_ok, pdf_reason),
+        'audio': (audio_ok, audio_reason),
         'desktop_selection': (shell_ok, shell_reason),
         'terminal': (terminal_ok, terminal_reason),
         'clipboard': (True, 'Clipboard Qt local disponível.'),
@@ -47,7 +57,7 @@ def probe_capabilities() -> dict[str, Capability]:
 
 def describe_capabilities(capabilities: dict[str, Capability]) -> str:
     labels = {
-        'images': 'Imagens', 'pdf': 'PDF', 'desktop_selection': 'Seleção do Explorer/Desktop',
+        'images': 'Imagens', 'pdf': 'PDF', 'audio': 'Áudio', 'desktop_selection': 'Seleção do Explorer/Desktop',
         'terminal': 'Terminal', 'clipboard': 'Clipboard', 'shelf': 'Prateleira', 'shift_f9': 'Shift+F9',
     }
     rows = []

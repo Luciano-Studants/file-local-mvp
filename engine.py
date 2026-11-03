@@ -2242,7 +2242,10 @@ def worker_main():
         raw=sys.stdin.buffer.read(65537)
         if len(raw)>65536: raise ConversionError('Pedido do job grande demais.')
         job=json.loads(raw)
-        if isinstance(job,dict) and job.get('op'): result={'ok':True,'outputs':pdfinfo.run_op(job,source_file)}       # leitura de PDF para a interface (informações e prévia), sem gerar arquivo do usuário
+        if isinstance(job,dict) and str(job.get('op','')).startswith('audio_'):
+            import mediatools
+            result={'ok':True,'outputs':mediatools.run_op(job,source_file)}       # leitura de áudio para a interface (informações), sem gerar arquivo
+        elif isinstance(job,dict) and job.get('op'): result={'ok':True,'outputs':pdfinfo.run_op(job,source_file)}       # leitura de PDF para a interface (informações e prévia), sem gerar arquivo do usuário
         else: result={'ok':True,'outputs':convert(job)}
     except Exception as e: result={'ok':False,'error':str(e)[:1000] or type(e).__name__}
     print(json.dumps(result,ensure_ascii=True),flush=True)

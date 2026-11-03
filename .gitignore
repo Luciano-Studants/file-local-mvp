@@ -10,3 +10,6 @@ quality-report/
 dist/relatorio-qualidade/
 *.zip
 .env
+# programas externos copiados para empacotar (não vão para o Git)
+/tesseract/
+/ffmpeg/

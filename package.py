@@ -20,6 +20,16 @@ if (root / 'tesseract' / 'tesseract.exe').is_file():
     data_args += ['--add-data', f'tesseract{os.pathsep}tesseract']
 else:
     print('AVISO: pasta «tesseract» ausente; o pacote sairá sem o programa de OCR (o OCR fica indisponível até instalá-lo).')
+# Áudio/Vídeo (0.9.43): o FFmpeg entra só se a pasta «ffmpeg» (ffmpeg.exe + ffprobe.exe) estiver ao lado deste script E for um build LGPL.
+if (root / 'ffmpeg' / 'ffmpeg.exe').is_file() or (root / 'ffmpeg' / 'bin' / 'ffmpeg.exe').is_file():
+    import mediatools
+    mediatools.reset_cache()
+    _build = mediatools.build_info()
+    if not _build or _build['license'] != 'lgpl':
+        raise SystemExit('A pasta «ffmpeg» não tem um build LGPL (sem --enable-gpl/--enable-nonfree); o pacote não será gerado.')
+    data_args += ['--add-data', f'ffmpeg{os.pathsep}ffmpeg']
+else:
+    print('AVISO: pasta «ffmpeg» ausente; o pacote sairá sem o FFmpeg (as ferramentas de áudio ficam indisponíveis).')
 subprocess.run([
     sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir',
     '--name', 'ArquivoLocal', '--collect-all', 'pypdf', '--collect-all', 'resvg_py', '--collect-all', 'pillow_heif', '--collect-all', 'pypdfium2', '--collect-all', 'pypdfium2_raw', '--collect-all', 'onnxruntime', '--collect-all', 'numpy',
