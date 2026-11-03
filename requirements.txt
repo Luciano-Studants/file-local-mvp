@@ -1,5 +1,5 @@
 Pillow==13.0.0
-pypdf==6.21.1
+pypdf==6.21.4
 cryptography==50.0.2
 cffi==2.1.1
 pycparser==3.12
