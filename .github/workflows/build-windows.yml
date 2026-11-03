@@ -12,10 +12,12 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONUTF8: '1'
-      TEMP: ${{ runner.temp }}      # caminho longo (o padrão RUNNER~1 quebra comparações de Path nos testes)
-      TMP: ${{ runner.temp }}
-      TMPDIR: ${{ runner.temp }}
     steps:
+      - name: TEMP com caminho longo (o padrão RUNNER~1 quebra comparações de Path nos testes)
+        shell: powershell
+        run: |
+          "TEMP=$env:RUNNER_TEMP" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TMP=$env:RUNNER_TEMP" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
