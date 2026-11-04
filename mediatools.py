@@ -24,6 +24,9 @@ MAX_OUTPUT = 4 * 1024 * 1024             # bytes aceitos da saída de um program
 MAX_STREAMS = 32                         # fluxos por arquivo (acima disso o arquivo é recusado)
 MAX_DURATION = 24 * 3600                 # segundos; acima disso o arquivo é recusado
 MAX_TAG = 200                            # caracteres por etiqueta mostrada
+MAX_EXTRA_TAGS = 40                      # etiquetas fora da lista editável mostradas por arquivo
+TECHNICAL_TAGS = frozenset({'encoder', 'major_brand', 'minor_version', 'compatible_brands', 'handler_name', 'vendor_id', 'creation_time', 'language'})
+COVER_TAG = 'metadata_block_picture'     # capa de OGG/Opus: vem como etiqueta (imagem em base64), não como fluxo
 TAG_KEYS = ('title', 'artist', 'album', 'album_artist', 'date', 'genre', 'track', 'disc', 'composer', 'comment')
 
 # codificadores de áudio necessários para as saídas planejadas (formato → codificadores aceitos, em ordem de preferência)
@@ -201,7 +204,8 @@ def parse_probe(data: dict) -> dict:
         raise MediaError('O áudio é longo demais para esta versão (limite de 24 horas).')
     tags = {str(k).lower(): v for k, v in {**(first.get('tags') or {}), **(fmt.get('tags') or {})}.items()}
     # capa embutida aparece como fluxo de vídeo com disposição attached_pic
-    has_cover = any(s.get('codec_type') == 'video' and (s.get('disposition') or {}).get('attached_pic') for s in streams)
+    has_cover = any(s.get('codec_type') == 'video' and (s.get('disposition') or {}).get('attached_pic') for s in streams) or COVER_TAG in tags
+    extra = {key: _text(value) for key, value in tags.items() if key not in TAG_KEYS and key not in TECHNICAL_TAGS and key != COVER_TAG and not key.startswith('tag:') and _text(value)}
     video = [s for s in streams if s.get('codec_type') == 'video' and not (s.get('disposition') or {}).get('attached_pic')]
     return {
         'container': _text(fmt.get('format_name', ''), 60), 'container_label': _text(fmt.get('format_long_name', ''), 80),
@@ -212,6 +216,7 @@ def parse_probe(data: dict) -> dict:
         'channel_layout': _text(first.get('channel_layout', ''), 40), 'bits_per_sample': _number(first.get('bits_per_sample') or first.get('bits_per_raw_sample'), int, 0),
         'stream_bit_rate': _number(first.get('bit_rate'), int, 0),
         'tags': {key: _text(tags[key]) for key in TAG_KEYS if key in tags and _text(tags[key])},
+        'extra_tags': dict(list(extra.items())[:MAX_EXTRA_TAGS]), 'extra_tag_count': len(extra),
     }
 
 
@@ -327,4 +332,8 @@ def describe(info: dict) -> list:
         rows.append(('Capítulos', str(info['chapters'])))
     for key, value in (info.get('tags') or {}).items():
         rows.append((TAG_LABELS.get(key, key), value))
+    for key, value in (info.get('extra_tags') or {}).items():
+        rows.append((f'Outra: {key}', value))
+    if info.get('extra_tag_count', 0) > len(info.get('extra_tags') or {}):
+        rows.append(('Outras etiquetas', f"mais {info['extra_tag_count'] - len(info['extra_tags'])} não mostradas"))
     return rows

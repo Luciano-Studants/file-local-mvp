@@ -32,6 +32,7 @@ import pdfredact
 import pdfstamp
 from pdf_stage import PdfStage
 import audioconvert
+import audiotags
 from audio_stage import AudioStage
 import mediatools
 from page_organizer import PageOrganizer
@@ -56,6 +57,7 @@ CATEGORIES = OrderedDict([
 
 AUDIO_INFO = tool_registry.AUDIO_INFO      # ferramenta de leitura: não gera arquivo (0.9.43)
 AUDIO_CONVERT = tool_registry.AUDIO_CONVERT
+AUDIO_TAGS = tool_registry.AUDIO_TAGS
 READONLY_TOOLS = frozenset({AUDIO_INFO})
 AUDIO_SUFFIXES = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '.aiff', '.aif', '.wma'}
 
@@ -81,6 +83,7 @@ TOOLS = {
     'audio': [
         (AUDIO_INFO, 'Informações', 'Duração, codec, taxa, canais, etiquetas e capa do áudio'),
         (AUDIO_CONVERT, 'Converter', 'Converter para MP3, M4A, FLAC, OGG, Opus, WAV ou AIFF'),
+        (AUDIO_TAGS, 'Metadados', 'Editar etiquetas, remover capa ou limpar tudo'),
     ],
     'pdf': [
         ('PDF → Text', 'Extrair texto', 'Exportar o texto das páginas'),
@@ -125,7 +128,7 @@ LABELS = {
     'Image → PDF': 'Imagem → PDF', **{spec.target: spec.panel_title for spec in tool_registry.IMAGE_TOOLS},
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Imagens embutidas no PDF', 'PDF → Images': 'Páginas do PDF em imagens',
     'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF', 'Stamp PDF': 'Numerar e carimbar o PDF', 'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Compress PDF': 'Comprimir PDF', 'Clean PDF': 'Metadados e cópia limpa do PDF', 'PDF OCR → PDF': 'PDF digitalizado → PDF pesquisável (OCR)', 'PDF OCR → Text': 'PDF digitalizado → texto (OCR)',
-    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio',
+    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Metadados do áudio',
     'Split PDF': 'Dividir e extrair páginas do PDF', 'Organize PDF': 'Organizar páginas do PDF', 'Merge PDFs': 'Unir PDFs',
 }
 FUTURE_SUFFIXES = {
@@ -533,6 +536,17 @@ class FeaturePanel(QMainWindow):
         self.ac_format = ChipGroup(['MP3', 'M4A', 'FLAC', 'OGG', 'Opus', 'WAV', 'AIFF'], per_row=4)
         self.ac_quality = ChipGroup(['Baixa', 'Média', 'Alta'], per_row=3); self.ac_quality.setCurrentIndex(1)
         self.ac_tags = ChipGroup(['Manter', 'Remover'], per_row=2)
+        self.at_edits = {key: QLineEdit() for key in audiotags.TAG_KEYS}
+        for edit in self.at_edits.values():
+            edit.setMaxLength(audiotags.MAX_VALUE)
+        self.at_box = QWidget(); at_form = QFormLayout(self.at_box); at_form.setContentsMargins(0, 0, 4, 0); at_form.setVerticalSpacing(6)
+        for key, edit in self.at_edits.items():
+            at_form.addRow(QLabel(mediatools.TAG_LABELS.get(key, key)), edit)
+        self.at_scroll = self.at_box          # o painel de ajustes já rola; os campos entram direto
+        self.at_mode = ChipGroup(['Editar', 'Limpar tudo'], per_row=2)
+        self.at_cover = ChipGroup(['Manter', 'Remover'], per_row=2)
+        self.at_info = QLabel(''); self.at_info.setWordWrap(True); self.at_info.setTextFormat(Qt.TextFormat.PlainText)
+        self._at_original = {}; self._at_loaded_for = None
         self.ac_info = QLabel(''); self.ac_info.setWordWrap(True); self.ac_info.setTextFormat(Qt.TextFormat.PlainText)
         self.cp_info = QLabel(''); self.cp_info.setWordWrap(True); self.cp_info.setTextFormat(Qt.TextFormat.PlainText)
         self.kl_meta = ChipGroup(['Remover', 'Manter'], per_row=2); self.kl_attach = ChipGroup(['Remover', 'Manter'], per_row=2); self.kl_js = ChipGroup(['Remover', 'Manter'], per_row=2)
@@ -637,6 +651,7 @@ class FeaturePanel(QMainWindow):
                 ('sstart', 'Primeiro nº', self.st_start), ('spages', 'Páginas', self.st_pages), ('sinfo', 'Exemplo', self.st_info),
                 ('plevel', 'Nível', self.cp_level), ('pinfo', 'Resultado', self.cp_info),
                 ('aformat', 'Formato', self.ac_format), ('aquality', 'Qualidade', self.ac_quality), ('atags', 'Etiquetas', self.ac_tags), ('ainfo', 'Resultado', self.ac_info),
+                ('atmode', 'Modo', self.at_mode), ('atfields', 'Campos', self.at_scroll), ('atcover', 'Capa', self.at_cover), ('atinfo', 'Resultado', self.at_info),
                 ('kdetails', 'No arquivo', self.kl_details), ('kmeta', 'Metadados', self.kl_meta), ('kattach', 'Anexos', self.kl_attach), ('kjs', 'JavaScript', self.kl_js), ('kinfo', 'Resultado', self.kl_info),
                 ('rpages', 'Páginas', self.rocr_pages), ('rskip', 'Páginas com texto', self.rocr_skip), ('rtext', 'Salvar como', self.rocr_text), ('rinfo', 'Resultado', self.rocr_info),
                 ('epages', 'Páginas', self.emb_pages), ('emin', 'Tamanho mínimo', self.emb_min), ('einfo', 'Resultado', self.emb_info),
@@ -764,6 +779,11 @@ class FeaturePanel(QMainWindow):
             control.valueChanged.connect(self._stamp_changed)
         for chips in (self.ac_format, self.ac_quality, self.ac_tags):
             chips.currentIndexChanged.connect(self._audioconvert_changed)
+        for chips in (self.at_mode, self.at_cover):
+            chips.currentIndexChanged.connect(self._audiotags_changed)
+        for edit in self.at_edits.values():
+            edit.textChanged.connect(self._audiotags_changed)
+        self.audio_stage.infos_ready.connect(self._audiotags_changed)
         self.audio_stage.infos_ready.connect(self._audioconvert_changed)
         self.cp_level.currentIndexChanged.connect(self._pdfcompress_changed); self.pdf_stage.infos_ready.connect(self._pdfcompress_changed)
         for chips in (self.kl_meta, self.kl_attach, self.kl_js):
@@ -815,7 +835,7 @@ class FeaturePanel(QMainWindow):
     # categorias e rodas
     # ------------------------------------------------------------------
     def _capability_for(self, target: str):
-        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT):
+        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS):
             return self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
         key = 'images' if target in IMAGE_TARGETS or target.startswith(tool_registry.GROUP_PREFIX) else 'pdf'
         return self.controller.capabilities.get(key, (False, 'Dependência indisponível.'))
@@ -1011,7 +1031,7 @@ class FeaturePanel(QMainWindow):
         for control in (self.crop_x, self.crop_y, self.crop_width, self.crop_height):
             control.setValue(0)
         self.crop_help.setText('Arraste na imagem para definir a área.')
-        if target in (AUDIO_INFO, AUDIO_CONVERT):
+        if target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS):
             self.file_preview.clear()
             self.pdf_stage.show_files([])
             audios = [path for path in self.files if Path(path).suffix.lower() in AUDIO_SUFFIXES or Path(path).suffix.lower() in ('.mp4', '.mkv', '.mov', '.webm')]
@@ -1021,7 +1041,7 @@ class FeaturePanel(QMainWindow):
                 self.stage.setCurrentIndex(STAGE_AUDIO)
             else:
                 self.audio_stage.show_files([])
-                self._stage_message('Abra um arquivo de áudio para ver as informações.' if target == AUDIO_INFO else 'Abra um arquivo de áudio ou vídeo para converter.')
+                self._stage_message('Abra um arquivo de áudio para ver as informações.' if target == AUDIO_INFO else ('Abra um arquivo de áudio para editar as etiquetas.' if target == AUDIO_TAGS else 'Abra um arquivo de áudio ou vídeo para converter.'))
             return
         if target not in IMAGE_TARGETS:
             self.file_preview.clear()
@@ -1272,6 +1292,7 @@ class FeaturePanel(QMainWindow):
             PDF_REDACT: ('rdhelp', 'rdbuttons', 'rdterms', 'rdpresets', 'rddpi', 'rdinfo'),
             PDF_COMPRESS: ('plevel', 'pinfo'),
             AUDIO_CONVERT: ('aformat', 'aquality', 'atags', 'ainfo'),
+            AUDIO_TAGS: ('atmode', 'atfields', 'atcover', 'atinfo'),
             PDF_CLEAN: ('kdetails', 'kmeta', 'kattach', 'kjs', 'kinfo'),
             PDF_OCR_PDF: ('olang', 'opsm', 'rpages', 'rskip', 'rinfo', 'ostatus'),
             PDF_OCR_TEXT: ('olang', 'opsm', 'rpages', 'rskip', 'rtext', 'rinfo', 'ostatus'),
@@ -1331,13 +1352,14 @@ class FeaturePanel(QMainWindow):
             'PDF → Images': 'Cada página vira uma imagem numerada («pagina-001») numa pasta nova ao lado do PDF. Resolução maior dá mais nitidez e arquivos bem maiores (limite de 40 megapixels por página). Texto e desenhos viram pixels; formulários e anotações não são desenhados. O PDF original não muda.',
             'Split PDF': 'Escolha como dividir: uma página por PDF, partes de N páginas, grupos de páginas (1-3; 4-6; 7-) ou extrair só algumas páginas para um PDF novo. Várias partes vão numeradas para uma pasta nova ao lado do original, que não muda. Anexos, formulários e assinaturas não são preservados.',
             'Organize PDF': 'Arraste as miniaturas para mudar a ordem; selecione uma ou várias (Ctrl ou Shift) para girar, duplicar, mover ou excluir. O resultado é um PDF novo, «<nome>-organizado.pdf»; o original não muda. Marcadores, anexos, formulários e assinaturas não são preservados.',
+            AUDIO_TAGS: 'Edita título, artista, álbum e outros campos, remove a capa ou limpa todas as etiquetas, SEM recodificar o áudio (nenhuma perda de qualidade). Campo em branco = removido; os campos que o app não edita são mantidos. Gera «<nome>-etiquetas» ao lado do original, que fica intacto. Com vários arquivos só «Limpar tudo» e «Remover capa» estão disponíveis.',
             AUDIO_CONVERT: 'Converte a primeira faixa de áudio (ou o áudio de um vídeo) para MP3, M4A, FLAC, OGG, Opus, WAV ou AIFF, sem internet. A qualidade vale só para os formatos com perda (MP3, M4A, OGG, Opus). Gera «<nome>-convertido» ao lado do original, que fica intacto.',
             AUDIO_INFO: 'Mostra o que o arquivo de áudio contém: duração, codec, taxa de amostragem, canais, taxa de bits, etiquetas e capa. É só leitura: nada é gravado nem alterado. A leitura é feita no seu computador, sem internet; a extensão do arquivo não decide o formato. Por enquanto o limite é de 100 MiB por arquivo.',
             'Merge PDFs': 'Os PDFs são unidos na ordem da lista (arraste ou use Subir e Descer). Para usar só parte de um arquivo, selecione-o e escreva as páginas, como 1-3,7. Cada arquivo ganha um marcador com o nome dele; formulários, anexos e assinaturas não são preservados. Os originais não mudam.',
         }
         self.tool_hint.setText(hints.get(target, 'A operação cria um novo arquivo; o original fica intacto.'))
         self.run_button.setText(self._run_text(target) if target in tool_registry.FORMAT_TARGETS else {**{spec.target: spec.run_label for spec in tool_registry.IMAGE_TOOLS},
-                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
+                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Salvar etiquetas', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
         if target == 'Split PDF':
             self._split_changed()
         if target == 'Organize PDF':
@@ -1359,6 +1381,8 @@ class FeaturePanel(QMainWindow):
             self._pdfcompress_changed()
         if target == AUDIO_CONVERT:
             self._audioconvert_changed()
+        if target == AUDIO_TAGS:
+            self._audiotags_changed()
         if target == PDF_STAMP:
             self._stamp_changed()
         if target == PDF_REDACT:
@@ -2137,6 +2161,84 @@ class FeaturePanel(QMainWindow):
             return
         text, ready = self._audioconvert_state()
         self.ac_info.setText(text)
+        self.run_button.setEnabled(ready)
+
+    # --- Metadados do áudio ---------------------------------------------------
+    def _audiotags_values(self) -> dict:
+        values = {'tag_cover': 'drop' if self.at_cover.currentIndex() == 1 else 'keep'}
+        if self.at_mode.currentIndex() == 1:
+            values['tag_mode'] = 'clear'
+            return values
+        values['tag_mode'] = 'edit'
+        if len(self.files) == 1:
+            for key, edit in self.at_edits.items():
+                text = edit.text().strip()
+                if text != self._at_original.get(key, ''):
+                    values['tag_' + key] = text
+        return values
+
+    def _audiotags_load(self):
+        """Preenche os campos com as etiquetas do arquivo (uma vez por arquivo, sem apagar o que a pessoa já digitou)."""
+        first = self.files[0] if len(self.files) == 1 else None
+        info = self.audio_stage.infos.get(first) if first else None
+        key = (first, bool(info) and not (info or {}).get('error'))
+        if key == self._at_loaded_for:
+            return
+        self._at_loaded_for = key
+        self._at_original = dict((info or {}).get('tags') or {}) if info and not info.get('error') else {}
+        for name, edit in self.at_edits.items():
+            edit.blockSignals(True); edit.setText(self._at_original.get(name, '')); edit.blockSignals(False)
+
+    def _audiotags_state(self):
+        if not self.files:
+            return 'Abra um arquivo de áudio.', False
+        capability = self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
+        if not capability[0]:
+            return capability[1], False
+        if not self.audio_stage.infos:
+            return 'Lendo o arquivo…', False
+        for info in self.audio_stage.infos.values():
+            if info.get('error'):
+                return str(info['error']), False
+            try:
+                audiotags.kind_of(info)
+            except mediatools.MediaError as error:
+                return str(error), False
+        single = len(self.files) == 1
+        clearing = self.at_mode.currentIndex() == 1
+        values = self._audiotags_values()
+        try:
+            audiotags.options_from(values)
+        except mediatools.MediaError as error:
+            text = str(error)
+            if text.startswith('Nada para mudar') and not single:
+                text = 'Com vários arquivos só «Limpar tudo» e «Remover capa» estão disponíveis.'
+            return text, False
+        lines = []
+        if len(self.files) > 1:
+            lines.append(f'{len(self.files)} arquivos: cada um é reescrito à parte.')
+        if clearing:
+            lines.append('Todas as etiquetas, a capa e os capítulos serão removidos.')
+        else:
+            changed = [mediatools.TAG_LABELS.get(key, key) for key in audiotags.TAG_KEYS if 'tag_' + key in values]
+            if changed:
+                lines.append('Vai mudar: ' + ', '.join(changed) + '.')
+            if values['tag_cover'] == 'drop':
+                lines.append('A capa será removida.')
+        extra = next(iter(self.audio_stage.infos.values())).get('extra_tag_count', 0) if single else 0
+        if extra and not clearing:
+            lines.append(f'Outros {extra} campo(s) do arquivo, que o app não edita, serão mantidos.')
+        lines.append('O áudio não é recodificado.')
+        return ' '.join(lines), True
+
+    def _audiotags_changed(self, *_args):
+        if self.selected_tool != AUDIO_TAGS:
+            return
+        self._audiotags_load()
+        clearing = self.at_mode.currentIndex() == 1
+        self.at_scroll.setEnabled(len(self.files) == 1 and not clearing)
+        text, ready = self._audiotags_state()
+        self.at_info.setText(text)
         self.run_button.setEnabled(ready)
 
     # --- Metadados e cópia limpa ---------------------------------------------
@@ -3128,6 +3230,11 @@ class FeaturePanel(QMainWindow):
             if not ready:
                 self.status.setText(text); return
             options.update(self._redact_values())
+        if target == AUDIO_TAGS:
+            text, ready = self._audiotags_state()
+            if not ready:
+                self.status.setText(text); return
+            options.update(self._audiotags_values())
         if target == AUDIO_CONVERT:
             text, ready = self._audioconvert_state()
             if not ready:

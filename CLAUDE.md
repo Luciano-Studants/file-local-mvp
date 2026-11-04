@@ -11,7 +11,7 @@ Conversor/ferramentas de arquivos **offline** para Windows 10/11 (também roda e
 - Uma funcionalidade por entrega (branch/PR por item). Falou «próximo passo» → próximo item do plano em `docs/PLANO-CATEGORIA-*.md`.
 
 ## Arquitetura (resumo; detalhes em `docs/ARCHITECTURE.md`)
-- Núcleo **sem Qt**: `engine.py`, `tool_registry.py`, `runner.py`, `pdfinfo.py`, `pdfcompress.py`, `pdfstamp.py`, `pdfredact.py`, `pdfform.py`, `mediatools.py`, `audioconvert.py`, `ocr.py`, `vector.py`, … (lista `CORE_MODULES` em `tests/test_architecture.py`; módulo novo do núcleo entra lá).
+- Núcleo **sem Qt**: `engine.py`, `tool_registry.py`, `runner.py`, `pdfinfo.py`, `pdfcompress.py`, `pdfstamp.py`, `pdfredact.py`, `pdfform.py`, `mediatools.py`, `audioconvert.py`, `audiotags.py`, `ocr.py`, `vector.py`, … (lista `CORE_MODULES` em `tests/test_architecture.py`; módulo novo do núcleo entra lá).
 - `runner.py`: cada job roda num worker (subprocesso), JSON por stdin, saída publicada atomicamente.
 - Interface: `workspace_panel.py` (painel e ferramentas), `pdf_stage.py`, `page_organizer.py`, `visual_tools.py`, `radial_menu.py`, `tray_app.py` (controlador `JobController`: valida tipos e chaves de opções).
 - Ferramenta nova de PDF toca: `engine.py` (constante, `OPERATIONS`, função, ramo em `_convert`, `loss_report`), `tool_registry.py` (opções str/int/lista/caminho), `tray_app.py` (rótulo e validação de listas), `workspace_panel.py` (TOOLS, roda, painel, estado, `run_selected`), testes, `package.py` (`--hidden-import`), `verify_package.py`, docs e `windows_acceptance_check.py`.
@@ -29,7 +29,7 @@ Conversor/ferramentas de arquivos **offline** para Windows 10/11 (também roda e
 - Quirks do pypdf: `PdfWriter(clone_from=…)` mantém objetos órfãos → clonar duas vezes (via BytesIO) para limpar; `writer._info=None` tira o /Info; AES exige `cryptography`.
 
 ## Estado
-- Categorias ativas: **Imagens** e **PDF** (13/13 itens, Portão B aprovado no Linux); **Áudio** em andamento (3/10). Próximas: Vídeo, Documentos… (ver `docs/`).
+- Categorias ativas: **Imagens** e **PDF** (13/13 itens, Portão B aprovado no Linux); **Áudio** em andamento (4/10). Próximas: Vídeo, Documentos… (ver `docs/`).
 - **Windows:** suíte (998 testes, 26 pulados por falta de Tesseract etc.), smoke e qualidade do PDF passam no CI (windows-latest, Python 3.12) desde 02/11/2026. **Ainda não exercitados no Windows:** PyInstaller, instalador (Inno Setup) e o app empacotado — rode «Build Windows» em Actions. Checklist manual: `windows_acceptance_check.py`.
 - Pendências legais: HEVC/x265, DLLs do Tesseract, pesos U²-Net/DUTS-TR.
 
@@ -37,7 +37,7 @@ Conversor/ferramentas de arquivos **offline** para Windows 10/11 (também roda e
 1. `git switch -c item-NN-nome` → implementar → `./dev.sh test` ou `.\dev.ps1 test` → PR → CI verde → merge.
 2. Atualizar: README (uma linha), RELEASE (cabeçalho novo), `docs/ARCHITECTURE.md` (item numerado), plano da categoria, checklist do Windows. Registro de continuidade no Project do Claude.
 
-- **Categoria atual: Áudio** (`docs/PLANO-CATEGORIA-AUDIO.md`). Itens 1 (base de mídia, `mediatools.py`), 2 (informações, `audio_stage.py`) e 3 (converter, `audioconvert.py`; roda em grupos `AUDIO_GROUPS`) entregues; próximo: item 4 (metadados). Ferramenta de áudio nova entra num grupo de `tool_registry.AUDIO_GROUPS`.
+- **Categoria atual: Áudio** (`docs/PLANO-CATEGORIA-AUDIO.md`). Itens 1 (base de mídia, `mediatools.py`), 2 (informações, `audio_stage.py`), 3 (converter, `audioconvert.py`; roda em grupos `AUDIO_GROUPS`) e 4 (metadados, `audiotags.py`) entregues; próximo: item 5 (canais). Ferramenta de áudio nova entra num grupo de `tool_registry.AUDIO_GROUPS`.
 
 ## Dependências e ambiente
 - `python tools/doctor.py` diagnostica o ambiente (obrigatórios e opcionais). Matriz completa em `docs/DEPENDENCIAS.md`.

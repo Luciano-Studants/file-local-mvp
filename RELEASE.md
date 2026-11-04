@@ -1,3 +1,12 @@
+# Arquivo Local 0.9.44-phase2-dev — Áudio: metadados
+
+## Novidades da 0.9.44 (categoria Áudio, item 4)
+- Nova ferramenta Áudio › Ler › **Metadados** (`Audio Tags`): edita título, artista, álbum, artista do álbum, data, gênero, faixa, disco, compositor e comentário; remove a capa; ou limpa tudo (etiquetas, capa e capítulos). O áudio é **copiado sem recodificar** (o hash do áudio decodificado é igual ao original). Campos que o app não edita são mantidos.
+- MP3, M4A, FLAC, OGG, Opus, WAV e AIFF; saída `-etiquetas`, sem sobrescrever. Conferência do resultado (codec, duração, campos, capa) antes de salvar; se o formato não guarda um campo (ex.: gênero no AIFF) nada é salvo e o app diz qual.
+- Limite conhecido: OGG/Opus com capa embutida só podem ser reescritos removendo a capa (limitação do FFmpeg).
+- A tela de **Informações** agora mostra também as outras etiquetas do arquivo e a capa de OGG/Opus.
+- Módulo novo `audiotags.py`; `tests/test_audiotags.py` (39 testes, FFmpeg real).
+
 # Arquivo Local 0.9.43-phase2-dev — Áudio: base, informações e conversão
 
 ## Novidades da 0.9.43 (categoria Áudio, itens 1 a 3)
