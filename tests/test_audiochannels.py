@@ -70,6 +70,7 @@ class ParsingAndArgumentTests(unittest.TestCase):
         text = '[Parsed_astats_0 @ 0x1] Overall\n[Parsed_astats_0 @ 0x1] Peak level dB: -21.07\n[Parsed_astats_0 @ 0x1] RMS level dB: -24.08\n'
         self.assertEqual(audiochannels.parse_levels(text), {'peak': -21.07, 'rms': -24.08})
         self.assertEqual(audiochannels.parse_levels('[x] RMS level dB: -inf\n[x] Peak level dB: 0.5\n'), {'rms': None, 'peak': 0.5})
+        self.assertEqual(audiochannels.parse_levels(text.replace('\n', '\r\n')), {'peak': -21.07, 'rms': -24.08})          # FFmpeg no Windows termina as linhas com CRLF
         self.assertEqual(audiochannels.parse_levels('nada\n'), {})
         self.assertEqual(audiochannels.parse_levels(None), {})
 

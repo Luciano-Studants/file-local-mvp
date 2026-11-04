@@ -29,7 +29,7 @@ PHASE_REFUSE_DB = -15.0        # mono quase mudo (mais de 15 dB abaixo): recusa
 HEADROOM_DB = 0.3              # folga abaixo de 0 dBFS ao reduzir o volume
 MAX_GAIN_DB = 24.0
 MAX_STDERR = 256 * 1024
-_LEVEL = re.compile(r'\b(Peak|RMS) level dB:[ \t]*(-?inf|-?\d+(?:\.\d+)?)[ \t]*$', re.M)
+_LEVEL = re.compile(r'\b(Peak|RMS) level dB:[ \t]*(-?inf|-?\d+(?:\.\d+)?)[ \t\r]*$', re.M)
 
 
 def options_from(job: dict) -> tuple:
