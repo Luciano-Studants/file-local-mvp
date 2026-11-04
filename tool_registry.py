@@ -207,6 +207,34 @@ def pdf_flat_targets() -> list[str]:
     return [target for _l, _t, _i, members in PDF_GROUPS.values() for target, *_rest in members]
 
 
+AUDIO_GROUP_PREFIX = '__audiogroup_'
+AUDIO_INFO = 'Audio Info'
+AUDIO_CONVERT = 'Convert Audio'
+
+# Roda do Áudio (plano em docs/PLANO-CATEGORIA-AUDIO.md): só entram operações já entregues; os grupos mantêm a forma final.
+AUDIO_GROUPS = {
+    'read': ('Ler', 'Ver o que o arquivo de áudio contém', 'eye', [
+        (AUDIO_INFO, 'Informações', 'Duração, codec, taxa, canais, etiquetas e capa', 'eye'),
+    ]),
+    'convert': ('Converter', 'Trocar o formato do áudio (MP3, M4A, FLAC, OGG, Opus, WAV, AIFF)', 'audio', [
+        (AUDIO_CONVERT, 'Converter', 'Converter para outro formato de áudio', 'audio'),
+    ]),
+}
+
+
+def audio_group_action(group: str) -> str:
+    return f'{AUDIO_GROUP_PREFIX}{group}__'
+
+
+def audio_wheel_layout() -> list[str]:
+    """Fatias de primeiro nível da roda do Áudio (ids de grupo)."""
+    return [audio_group_action(group) for group in AUDIO_GROUPS]
+
+
+def audio_flat_targets() -> list[str]:
+    return [target for _l, _t, _i, members in AUDIO_GROUPS.values() for target, *_rest in members]
+
+
 BY_TARGET = {spec.target: spec for spec in IMAGE_TOOLS}
 BY_ACTION = {spec.action: spec for spec in IMAGE_TOOLS}
 TARGETS = tuple(spec.target for spec in IMAGE_TOOLS)
@@ -218,7 +246,7 @@ FORMAT_TARGETS = PNG_TARGETS | {PDF_IMAGES}      # «PDF → imagens» também u
 BASE_INT_OPTIONS = frozenset({'width', 'rotation', 'quality', 'out_quality', 'rename_start', 'rename_digits', 'rename_n', 'vector_width', 'pdf_dpi', 'split_every', 'img_min', 'stamp_size', 'stamp_opacity', 'stamp_margin', 'stamp_angle', 'stamp_start'})
 BASE_PATH_OPTIONS = frozenset({'sign_image'})      # caminhos que não pertencem a uma ferramenta de imagem (assinatura visual do PDF)
 BASE_LIST_OPTIONS = frozenset({'merge_ranges', 'organize_pages', 'redact_areas', 'redact_terms', 'form_values', 'sign_areas'})      # «Unir PDFs»: um intervalo de páginas (texto) por arquivo, na ordem da lista
-BASE_STR_OPTIONS = frozenset({'background', 'out_format', 'out_flatten', 'rename_pattern', 'to_folder', 'pdf_pages', 'split_mode', 'split_ranges', 'text_mode', 'text_layout', 'ocr_skip', 'meta_info', 'meta_attach', 'meta_js', 'pdf_level', 'stamp_kind', 'stamp_text', 'stamp_position', 'stamp_color', 'stamp_bold', 'pdf_password', 'pdf_owner_password', 'perm_print', 'perm_copy', 'perm_edit', 'redact_patterns', 'form_flatten'})
+BASE_STR_OPTIONS = frozenset({'background', 'out_format', 'out_flatten', 'rename_pattern', 'to_folder', 'pdf_pages', 'split_mode', 'split_ranges', 'text_mode', 'text_layout', 'ocr_skip', 'meta_info', 'meta_attach', 'meta_js', 'audio_format', 'audio_quality', 'audio_tags', 'pdf_level', 'stamp_kind', 'stamp_text', 'stamp_position', 'stamp_color', 'stamp_bold', 'pdf_password', 'pdf_owner_password', 'perm_print', 'perm_copy', 'perm_edit', 'redact_patterns', 'form_flatten'})
 
 
 def all_int_options() -> frozenset[str]:

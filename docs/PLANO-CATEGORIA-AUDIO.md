@@ -14,7 +14,7 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 |---|---|---|
 | 1 | **Base de mídia:** localizar FFmpeg/ffprobe, licença do build, leitura segura | ✅ 0.9.43 |
 | 2 | **Informações do áudio:** painel com duração, codec, taxa, canais, etiquetas, capa; vários arquivos; leitura no worker (`audio_info`) | ✅ 0.9.43 |
-| 3 | **Converter:** MP3, M4A/AAC, FLAC, OGG/Vorbis, Opus, WAV, AIFF; qualidade (bitrate/VBR/nível FLAC); relatório de perdas; publicação atômica; limite próprio de tamanho | ⏳ próximo |
+| 3 | **Converter:** MP3, M4A/AAC, FLAC, OGG/Vorbis, Opus, WAV, AIFF; qualidade (bitrate/VBR/nível FLAC); relatório de perdas; publicação atômica; limite próprio de tamanho | ✅ 0.9.43 |
 | 4 | **Metadados:** ver tudo; remover/editar só etiquetas permitidas; capa | |
 | 5 | **Canais:** mono/estéreo, downmix explícito, aviso de clipping/fase | |
 | 6 | **Cortar:** início/fim com onda visual; silêncio só nas pontas | |
@@ -24,12 +24,14 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 | 10 | **Visualizador em MP4:** exige codificador de vídeo aprovado; por último | |
 
 ### Decisões de interface
-- Enquanto a categoria tem poucas ferramentas, o Áudio usa **cartões** (ativos e «Planejado»). Ao entregar o item 3 passa a **roda em grupos**, respeitando o limite de 8 fatias: **Ler** (Informações, Metadados), **Converter** (Converter, Comprimir), **Ajustar** (Canais, Normalizar), **Editar** (Cortar, Bleep, Visualizador). Os grupos ficam em `tool_registry` (como `PDF_GROUPS`) e o `test_wheel_layout` passa a cobri-los.
+- Desde o item 3 o Áudio usa a **roda em grupos** (`tool_registry.AUDIO_GROUPS`, `radial_menu.audio_tool_actions`), respeitando o limite de 8 fatias. Hoje só entram operações já entregues (**Ler › Informações**, **Converter › Converter**); o desenho final é: **Ler** (Informações, Metadados), **Converter** (Converter, Comprimir), **Ajustar** (Canais, Normalizar), **Editar** (Cortar, Bleep, Visualizador). Os grupos ficam em `tool_registry` (como `PDF_GROUPS`) e o `test_wheel_layout` passa a cobri-los.
 - Ferramenta de leitura (`READONLY_TOOLS`): sem botão «Aplicar» nem «Abrir pasta do resultado».
-- Soltar um áudio no app abre «Informações» direto (enquanto for a única ferramenta).
+- Soltar um áudio no app abre «Informações» direto; «Converter» fica a um clique na roda e já usa os arquivos abertos.
 
 ### Limites conhecidos
-- O motor recusa arquivos acima de 100 MiB (`source_file`); para áudio longo sem perdas (FLAC/WAV) o item 3 define um limite próprio, validado.
+- Áudio e vídeo de entrada: até **512 MiB** (`engine.AUDIO_MAX_BYTES`; o FFmpeg lê em fluxo). Demais categorias seguem em 100 MiB.
+- Saída: até 512 MiB (limite do worker). WAV/AIFF/FLAC têm o tamanho **estimado antes** (duração × taxa × canais × 2 bytes) e a conversão é recusada se passar de ~95 % do limite; sem duração conhecida só os formatos comprimidos são aceitos. O FFmpeg também roda com `-fs` como segunda trava.
+- Tempo: 800 s por arquivo (alvo «longo» do runner, 900 s). O limite de CPU do worker (160 s) vale só para o Python; o FFmpeg é processo filho.
 - Só o primeiro fluxo de áudio é descrito; arquivos de vídeo com áudio são aceitos para leitura.
 
 ## Portões
@@ -39,3 +41,11 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 ## Pendências externas (não bloqueiam o desenvolvimento)
 - Escolher e **fixar um build LGPL do FFmpeg para Windows** (versão, URL, SHA-256, flags e licenças registrados em `THIRD_PARTY_NOTICES.md`); copiar para `ffmpeg\` antes do `package.py`. O build do CI (choco/apt) é GPL e serve só para testes.
 - Revisão jurídica: patentes de codecs (AAC/MP3) na distribuição.
+
+### Item 3 — Converter (0.9.43)
+- Núcleo `audioconvert.py` (sem Qt): `options_from` (`audio_format` mp3/m4a/flac/ogg/opus/wav/aiff, `audio_quality` low/medium/high, `audio_tags` keep/drop), `build_args`, `estimate_bytes`, `loss_notes`, `convert`.
+- Qualidade (só formatos com perda): MP3 128/192/320 kbps · M4A 96/160/256 kbps · Opus 64/96/160 kbps · OGG `-q:a` 3/5/8. FLAC/WAV/AIFF ignoram a qualidade (WAV/AIFF gravam 16 bits).
+- Segurança do FFmpeg: sem shell, `-nostdin`, `-protocol_whitelist file`, `-format_whitelist` (só demuxers de áudio/vídeo conhecidos: uma lista `.m3u8` não consegue puxar outro arquivo), entrada `file:<caminho absoluto>`, `-n` (nunca sobrescreve), `-fs`, `-fflags +bitexact`, tempo máximo. A extensão não decide o formato. O mesmo `-format_whitelist` vale agora para o `ffprobe` das informações.
+- Só a primeira faixa de áudio é convertida (`-map 0:a:0 -vn -sn -dn`); capa e capítulos não vão; MP3 com mais de 2 canais é mixado para estéreo.
+- Conferência antes de publicar: codec esperado, 1 fluxo de áudio, sem vídeo, duração dentro de 2 % (ou 1 s). Falhou → nada é salvo. Publicação por `engine.publish` (nome `<nome>-convertido.<ext>`, nunca sobrescreve).
+- Relatório de perdas (`engine.loss_report`) lê o arquivo real e avisa: formato com perda, 24 bits → 16 bits, vídeo descartado, faixas extras, downmix, capa/capítulos, mesmo formato de origem, etiquetas.

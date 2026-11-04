@@ -32,6 +32,10 @@ OUTPUT_ENCODERS = {
     'wav': ('pcm_s16le',), 'aiff': ('pcm_s16be',),
 }
 
+# demuxers aceitos na entrada (nomes do FFmpeg): impede que listas de reprodução (HLS, concat…) abram outros arquivos
+INPUT_FORMATS = ('mov,mp4,m4a,3gp,3g2,mj2', 'mp3', 'flac', 'ogg', 'wav', 'w64', 'aiff', 'caf', 'matroska,webm', 'asf', 'aac', 'ac3', 'eac3', 'amr', 'ape',
+                 'wv', 'tta', 'mpc', 'mpc8', 'dsf', 'avi', 'flv', 'mpegts', 'mpeg', 'au', 'sox', 'voc', 'oma', 'ac4', 'dts', 'dtshd', 'truehd', 'mlp', 'wtv', 'rm', 'ogv')
+
 _EXE = {'ffmpeg': 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg', 'ffprobe': 'ffprobe.exe' if os.name == 'nt' else 'ffprobe'}
 _cache: dict = {}
 
@@ -212,7 +216,7 @@ def parse_probe(data: dict) -> dict:
 
 
 def probe_args(path: str) -> list:
-    return ['-v', 'error', '-protocol_whitelist', 'file', '-print_format', 'json', '-show_format', '-show_streams', '-show_chapters', '-i', 'file:' + path]
+    return ['-v', 'error', '-protocol_whitelist', 'file', '-format_whitelist', ','.join(INPUT_FORMATS), '-print_format', 'json', '-show_format', '-show_streams', '-show_chapters', '-i', 'file:' + path]
 
 
 def probe(path) -> dict:

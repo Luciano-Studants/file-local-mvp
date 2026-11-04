@@ -4,6 +4,7 @@ import struct
 import errno, json, os, re, shutil, stat, tempfile, warnings
 from pathlib import Path
 
+import audioconvert
 import bgremove
 import ocr
 import pdfcompress
@@ -15,6 +16,8 @@ import tool_registry
 
 VERSION = '0.9.42-phase2-dev'
 MAX_BYTES = 100 * 1024 * 1024
+AUDIO_MAX_BYTES = 512 * 1024 * 1024      # áudio e vídeo de entrada (o arquivo é lido em fluxo pelo FFmpeg, não carregado na memória)
+AUDIO_CONVERT='Convert Audio'
 MAX_PIXELS = 40_000_000
 MAX_OUTPUT = 512 * 1024 * 1024
 COLLAGE_MIN, COLLAGE_MAX = 2, 12
@@ -44,6 +47,7 @@ BACKDROPS = {
 }
 BACKDROP_RATIOS = {'auto': None, '1:1': (1, 1), '16:9': (16, 9), '4:5': (4, 5)}
 TOOL_SUFFIX = {spec.target: spec.suffix for spec in tool_registry.IMAGE_TOOLS if spec.suffix}
+TOOL_SUFFIX[AUDIO_CONVERT]='convertido'
 RESIZE_MODES = ('percent', 'fit', 'exact')
 RESIZE_MAX_SIDE = 10000
 WATERMARK_POSITIONS = ('tl','tc','tr','ml','c','mr','bl','bc','br','tile')   # cantos, bordas, centro e repetida na diagonal
@@ -58,7 +62,7 @@ ROTATE_ANGLES = (0, 90, 180, 270)      # graus no sentido horário
 ADJUST_RANGE = 100
 REDACT_MAX_REGIONS = 50
 REDACT_MODES = ('black', 'pixelate')
-OPERATIONS = list(IMAGE_OUTPUTS) + ['Image → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF']
+OPERATIONS = list(IMAGE_OUTPUTS) + ['Image → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF', AUDIO_CONVERT]
 RENAMEABLE_TARGETS = frozenset(IMAGE_OUTPUTS) | {'Image → PDF'}      # a colagem usa o mesmo padrão, com {nome} = «colagem»
 class ConversionError(ValueError): pass
 
@@ -167,7 +171,7 @@ def redact_apply(im,regions,mode,block):
         out.paste(patch,box);patch.close()
     return out
 
-def source_file(raw):
+def source_file(raw, max_bytes=MAX_BYTES):
     p=Path(raw).expanduser()
     # Reject devices, symlinks, Windows reparse points and remote UNC paths.
     if not p.is_absolute(): raise ConversionError('Escolha um caminho de arquivo local absoluto.')
@@ -175,7 +179,7 @@ def source_file(raw):
     s=p.lstat()
     if not stat.S_ISREG(s.st_mode) or p.is_symlink() or getattr(s,'st_file_attributes',0)&0x400:
         raise ConversionError('Escolha um arquivo comum, não uma pasta, atalho ou dispositivo.')
-    if s.st_size==0 or s.st_size>MAX_BYTES: raise ConversionError('Os arquivos não podem estar vazios nem passar de 100 MiB.')
+    if s.st_size==0 or s.st_size>max_bytes: raise ConversionError(f'Os arquivos não podem estar vazios nem passar de {max_bytes//(1024*1024)} MiB.')
     return checked_resolve(p, s)
 
 def checked_resolve(path, before):
@@ -483,7 +487,7 @@ REDACT_DEFAULT_DPI=200
 PDF_UNPROTECT='Unprotect PDF'
 PASSWORD_MIN=4
 STAMP_KINDS=('text','watermark')
-PDF_LONG_TARGETS=('PDF OCR → PDF','PDF OCR → Text','Compress PDF','Redact PDF')      # jobs que podem passar do tempo padrão do runner
+PDF_LONG_TARGETS=('PDF OCR → PDF','PDF OCR → Text','Compress PDF','Redact PDF','Convert Audio')      # jobs que podem passar do tempo padrão do runner
 PDF_OCR_PDF='PDF OCR → PDF'
 PDF_OCR_TEXT='PDF OCR → Text'
 PDF_OCR_TARGETS=(PDF_OCR_PDF,PDF_OCR_TEXT)
@@ -1170,6 +1174,14 @@ def loss_report(paths, target, options=None):
         notes.append('A marca d\'água é desenhada por cima do conteúdo (não por baixo) e pode ser removida por quem editar o PDF: não serve como proteção.' if str(options.get('stamp_kind') or 'text')=='watermark' else 'O carimbo pode cobrir parte do conteúdo se a margem for pequena; confira a posição.')
         notes.append('Assinaturas digitais ficam inválidas (o arquivo foi reescrito); marcadores e anexos são mantidos.')
         return notes
+    if target==AUDIO_CONVERT:
+        try: fmt,quality,tags=audioconvert.options_from(options)
+        except audioconvert.MediaError as error: return [str(error)]
+        info=None
+        try:
+            if paths: info=audioconvert.mediatools.probe(source_file(paths[0],AUDIO_MAX_BYTES))
+        except (audioconvert.MediaError,ConversionError,OSError): info=None
+        return audioconvert.loss_notes(info,fmt,quality,tags)
     if target==PDF_COMPRESS:
         level=str(options.get('pdf_level') or pdfcompress.DEFAULT_LEVEL)
         dpi,quality,photos=pdfcompress.LEVELS.get(level,pdfcompress.LEVELS[pdfcompress.DEFAULT_LEVEL])
@@ -1393,7 +1405,8 @@ def _convert(job):
     if target not in OPERATIONS: raise ConversionError('Operação não suportada.')
     raws=job.get('paths',[])
     if not isinstance(raws,list) or not 1<=len(raws)<=100: raise ConversionError('Selecione de 1 a 100 arquivos.')
-    paths=[source_file(p) for p in raws]
+    limit=AUDIO_MAX_BYTES if target==AUDIO_CONVERT else MAX_BYTES
+    paths=[source_file(p,limit) for p in raws]
     if target not in ('Merge PDFs','Collage → PNG',ONEPDF) and len(paths)!=1: raise ConversionError('Cada conversão aceita um arquivo; use a fila em lote.')
     folder=output_folder(job.get('output') or paths[0].parent)
     work_root=folder
@@ -1539,6 +1552,10 @@ def _convert(job):
         elif target==PDF_STAMP:
             if p.suffix.lower()!='.pdf': raise ConversionError('Selecione somente arquivos PDF.')
             results.extend(pdf_stamp(p,read_pdf(p),job,folder,stage))
+        elif target==AUDIO_CONVERT:
+            try: done=audioconvert.convert(p,stage,job)
+            except audioconvert.MediaError as error: raise ConversionError(f'{p.name}: {error}') from error
+            results.append(publish(stage,folder,stem,done['suffix']))
         elif target==PDF_COMPRESS:
             if p.suffix.lower()!='.pdf': raise ConversionError('Selecione somente arquivos PDF.')
             results.extend(pdf_compress(p,read_pdf(p),job,folder,work,stage))
@@ -2244,7 +2261,7 @@ def worker_main():
         job=json.loads(raw)
         if isinstance(job,dict) and str(job.get('op','')).startswith('audio_'):
             import mediatools
-            result={'ok':True,'outputs':mediatools.run_op(job,source_file)}       # leitura de áudio para a interface (informações), sem gerar arquivo
+            result={'ok':True,'outputs':mediatools.run_op(job,lambda raw: source_file(raw,AUDIO_MAX_BYTES))}       # leitura de áudio para a interface (informações), sem gerar arquivo
         elif isinstance(job,dict) and job.get('op'): result={'ok':True,'outputs':pdfinfo.run_op(job,source_file)}       # leitura de PDF para a interface (informações e prévia), sem gerar arquivo do usuário
         else: result={'ok':True,'outputs':convert(job)}
     except Exception as e: result={'ok':False,'error':str(e)[:1000] or type(e).__name__}
