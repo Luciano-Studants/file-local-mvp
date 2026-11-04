@@ -89,8 +89,8 @@ class ConversionTests(unittest.TestCase):
         with self.assertRaisesRegex(ConversionError,'senha'):convert(self.job('PDF → Text',[p]))
     def test_pdf_page_limit(self):
         with self.assertRaisesRegex(ConversionError,'200'):convert(self.job('Split PDF',[self.pdf(pages=201)]))
-    def test_only_images_and_pdfs_are_enabled(self):
-        self.assertEqual(set(OPERATIONS), {'PNG', 'JPEG', 'WEBP', 'TIFF', 'BMP', 'Image → PDF', 'Crop → PNG', 'Canvas → PNG', 'Annotate → PNG', 'Compress → JPEG', 'Collage → PNG', 'Backdrop → PNG', 'Remove Background → PNG', 'Redact → PNG', 'Clean → PNG', 'Adjust → PNG', 'Resize → PNG', 'Rotate → PNG', 'Watermark → PNG', 'Sharpen → PNG', 'Levels → PNG', 'Shapes → PNG', 'Images → One PDF', 'OCR → Text', 'OCR → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF'})
+    def test_only_images_pdfs_and_audio_are_enabled(self):
+        self.assertEqual(set(OPERATIONS), {'PNG', 'JPEG', 'WEBP', 'TIFF', 'BMP', 'Image → PDF', 'Crop → PNG', 'Canvas → PNG', 'Annotate → PNG', 'Compress → JPEG', 'Collage → PNG', 'Backdrop → PNG', 'Remove Background → PNG', 'Redact → PNG', 'Clean → PNG', 'Adjust → PNG', 'Resize → PNG', 'Rotate → PNG', 'Watermark → PNG', 'Sharpen → PNG', 'Levels → PNG', 'Shapes → PNG', 'Images → One PDF', 'OCR → Text', 'OCR → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF', 'Convert Audio'})
         for target in ('MP3', 'SRT → VTT', 'SHA-256'):
             with self.subTest(target=target), self.assertRaises(ConversionError):
                 convert(self.job(target))

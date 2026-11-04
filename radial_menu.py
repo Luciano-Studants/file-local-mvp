@@ -26,6 +26,8 @@ ACTION_ICONS = {
     **{tool_registry.group_action(group): icon for group, (_label, _tip, icon) in tool_registry.GROUPS.items()}, '__group_back__': 'back',
     **{tool_registry.pdf_group_action(group): icon for group, (_label, _tip, icon, _members) in tool_registry.PDF_GROUPS.items()},
     **{target: icon for _l, _t, _i, members in tool_registry.PDF_GROUPS.values() for target, _label, _tip, icon in members},
+    **{tool_registry.audio_group_action(group): icon for group, (_label, _tip, icon, _members) in tool_registry.AUDIO_GROUPS.items()},
+    **{target: icon for _l, _t, _i, members in tool_registry.AUDIO_GROUPS.values() for target, _label, _tip, icon in members},
     '__panel__': 'tools', 'PDF → Text': 'text', 'PDF → Images': 'image', 'Split PDF': 'split', '__panel_merge__': 'merge', 'Merge PDFs': 'merge',
     '__copy_paths__': 'copy', '__copy_files__': 'copy', '__copy_group__': 'copy', '__shelf_add__': 'shelf', '__open_terminal__': 'terminal',
 }
@@ -112,6 +114,15 @@ def pdf_tool_actions() -> list[RadialAction]:
     for group, (label, tip, _icon, members) in tool_registry.PDF_GROUPS.items():
         children = tuple(RadialAction(member_label, target, member_tip) for target, member_label, member_tip, _member_icon in members)
         actions.append(RadialAction(label, tool_registry.pdf_group_action(group), tip, children=children))
+    return actions
+
+
+def audio_tool_actions() -> list[RadialAction]:
+    """Fatias de primeiro nível das operações de áudio; cada grupo abre uma sub-roda."""
+    actions = []
+    for group, (label, tip, _icon, members) in tool_registry.AUDIO_GROUPS.items():
+        children = tuple(RadialAction(member_label, target, member_tip) for target, member_label, member_tip, _member_icon in members)
+        actions.append(RadialAction(label, tool_registry.audio_group_action(group), tip, children=children))
     return actions
 
 
@@ -439,10 +450,10 @@ class RadialWheel(QWidget):
                 painter.setPen(QPen(QColor(theme.LINE_STRONG), 1.4)); painter.setBrush(Qt.BrushStyle.NoBrush); painter.drawPath(path)
             anchor = self.slice_center(index)
             chord = 2 * math.pi * ((self.inner_radius + radius) / 2) / max(count, 1)
-            width = max(68.0 if count >= 9 else 54.0, min(chord - 14, radius - self.inner_radius - 6))
+            width = max(68.0 if count >= 9 else (80.0 if count <= 3 else 54.0), min(chord - 14, radius - self.inner_radius - 6))
             text = action.label.upper() + ('\u00a0›' if action.children else '')
             fitted = QFont(label_font)
-            longest = max(text.split() or [''], key=len)
+            longest = max(text.split(' ') or [''], key=lambda part: QFontMetrics(label_font).horizontalAdvance(part))      # só o espaço comum quebra linha: «PALAVRA ›» (espaço não separável) é medida inteira
             while fitted.pixelSize() > 8 and QFontMetrics(fitted).horizontalAdvance(longest) > width:
                 fitted.setPixelSize(fitted.pixelSize() - 1)
             color = '#ffffff' if hot else (theme.DISABLED if muted else theme.PETAL_TEXT)

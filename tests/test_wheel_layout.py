@@ -30,6 +30,7 @@ def every_wheel():
         'imagens: ferramentas (painel)': radial_menu.image_tool_actions(engine_targets=True),
         'imagens: ferramentas (Shift+F9)': radial_menu.image_tool_actions(selection_only=True),
         'pdf: painel': radial_menu.pdf_tool_actions(),
+        'áudio: painel': radial_menu.audio_tool_actions(),
         'rápida: imagem': radial_menu.actions_for_file('a.png'),
         'rápida: pdf': radial_menu.actions_for_file('a.pdf'),
         'rápida: outro': radial_menu.actions_for_file('a.xyz'),
@@ -66,6 +67,14 @@ class WheelLayoutTests(unittest.TestCase):
                         self.assertTrue(action.description, 'fatia sem descrição (legenda ao passar o mouse)')
                     if action.icon:
                         self.assertIn(action.icon, icons.ICON_SHAPES)
+
+    def test_audio_wheel_reaches_every_audio_operation_exactly_once(self):
+        reachable = tool_registry.audio_flat_targets()
+        self.assertEqual(len(reachable), len(set(reachable)))
+        children = [c.target for a in radial_menu.audio_tool_actions() for c in a.children]
+        self.assertEqual(sorted(children), sorted(reachable))
+        self.assertEqual(sorted(reachable), sorted(target for target, _l, _d in workspace_panel.TOOLS['audio']))
+        self.assertEqual(workspace_panel.WHEEL_COLUMNS['audio'][0][2], tool_registry.audio_wheel_layout())
 
     def test_pdf_wheel_reaches_every_pdf_operation_exactly_once(self):
         panel_pdf = [target for target, _label, _description in workspace_panel.TOOLS['pdf']]

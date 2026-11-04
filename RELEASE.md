@@ -1,3 +1,14 @@
+# Arquivo Local 0.9.43-phase2-dev — Áudio: base, informações e conversão
+
+## Novidades da 0.9.43 (categoria Áudio, itens 1 a 3)
+- **Base de mídia** (`mediatools.py`): localiza FFmpeg/ffprobe, confere a licença do build (o pacote só embute build LGPL) e lê arquivos sem shell, com tempo e tamanho máximos. `python tools/doctor.py` mostra o estado.
+- **Áudio › Ler › Informações**: duração, codec, taxa, canais, taxa de bits, etiquetas e capa; vários arquivos; leitura no worker.
+- **Áudio › Converter › Converter** (`Convert Audio`): MP3, M4A (AAC), FLAC, OGG (Vorbis), Opus, WAV e AIFF; qualidade baixa/média/alta; manter ou remover etiquetas; áudio de vídeos; relatório de perdas; conferência do resultado (codec, duração) antes de salvar; saída `-convertido`, sem sobrescrever. Entrada de até 512 MiB.
+- Segurança: `-protocol_whitelist file` e `-format_whitelist` (listas de reprodução não abrem outros arquivos); o mesmo vale para a leitura de informações.
+- A categoria Áudio ganhou **roda em grupos** (Ler, Converter); a roda do PDF foi reorganizada em 5 grupos e há um teste que barra rodas com mais de 8 fatias ou rótulos com mais de 13 caracteres.
+- Correção visual: o rótulo de fatia com seta («CONVERTER ›») era medido sem a seta e podia ficar cortado.
+- Testes novos: `test_mediatools.py`, `test_audio_stage.py`, `test_audioconvert.py`, `test_wheel_layout.py`, `test_doctor.py`. **Testar no Windows** com um FFmpeg LGPL real (versão a fixar; ver THIRD_PARTY_NOTICES).
+
 # Arquivo Local 0.9.42-phase2-dev — Portão B da categoria PDF
 
 ## Novidades da 0.9.42 (fim da categoria PDF)

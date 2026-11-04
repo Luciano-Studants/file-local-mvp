@@ -156,19 +156,17 @@ class PanelTests(unittest.TestCase):
         self.panel.audio_stage.loader = lambda job: mediatools.run_op(job)
         self.addCleanup(self.panel.close)
 
-    def test_audio_category_has_a_real_tool_and_planned_ones_disabled(self):
+    def test_audio_category_uses_the_wheel_with_groups(self):
         self.panel.select_category('audio')
-        buttons = [self.panel.tool_grid.itemAt(i).widget() for i in range(self.panel.tool_grid.count())]
-        buttons = [b for b in buttons if isinstance(b, QPushButton)]
-        enabled = [b for b in buttons if b.isEnabled()]
-        self.assertEqual(len(enabled), 1); self.assertIn('Informações', enabled[0].text())
-        self.assertGreaterEqual(len([b for b in buttons if not b.isEnabled() and 'Planejado' in b.text()]), 5)
+        self.assertIs(self.panel.category_body.currentWidget(), self.panel.wheels_scroll)
+        wheel = self.panel.wheel_widgets[0]
+        self.assertEqual([a.label for a in wheel.actions], ['Ler', 'Converter'])
+        self.assertEqual([c.target for a in wheel.actions for c in a.children], [wp.AUDIO_INFO, wp.AUDIO_CONVERT])
         self.assertTrue(wp.CATEGORIES['audio'][2])
 
-    def test_choosing_the_card_opens_the_read_only_tool(self):
+    def test_choosing_the_wheel_slice_opens_the_read_only_tool(self):
         self.panel.select_category('audio')
-        card = next(b for b in (self.panel.tool_grid.itemAt(i).widget() for i in range(self.panel.tool_grid.count())) if isinstance(b, QPushButton) and b.isEnabled())
-        card.click()
+        self.panel.select_tool(wp.AUDIO_INFO)
         self.assertEqual(self.panel.selected_tool, wp.AUDIO_INFO)
         self.assertEqual(self.panel.tool_title.text(), 'Informações do áudio')
         self.assertTrue(self.panel.run_button.isHidden())
