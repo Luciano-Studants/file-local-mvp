@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 from engine import VERSION, OPERATIONS, COLLAGE_MAX, ConversionError, batch_rename_options, batch_target_ok, create_batch_folder, loss_report
 from capabilities import describe_capabilities, probe_capabilities
 from radial_menu import RadialAction, RadialMenu, actions_for_file, actions_for_selection
-from runner import Cancelled, run_job
+from runner import Cancelled, run_job, take_notes
 from windows_bridge import key_is_down, selected_paths_from_explorer, shift_is_down
 from global_hotkey import GlobalHotkey, parse_hotkey
 from settings import Settings, load_settings, save_settings
@@ -36,7 +36,7 @@ LABELS = {
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Extrair imagens embutidas do PDF',
     'PDF → Images': 'Salvar páginas do PDF como imagens',
     'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF',
-    'Stamp PDF': 'Numerar e carimbar o PDF', 'Compress PDF': 'Comprimir PDF', 'Convert Audio': 'Converter áudio', 'Audio Tags': 'Editar etiquetas do áudio',
+    'Stamp PDF': 'Numerar e carimbar o PDF', 'Compress PDF': 'Comprimir PDF', 'Convert Audio': 'Converter áudio', 'Audio Tags': 'Editar etiquetas do áudio', 'Audio Channels': 'Mudar os canais do áudio',
     'Clean PDF': 'Cópia limpa do PDF (sem metadados)',
     'PDF OCR → PDF': 'Reconhecer texto do PDF digitalizado (PDF pesquisável)', 'PDF OCR → Text': 'Reconhecer texto do PDF digitalizado (texto)',
     'Merge PDFs': 'Unir PDFs',
@@ -209,6 +209,9 @@ class JobController(QObject):
             self.last_report = loss_report(paths, target, job.get('options')) if success else []
         except Exception:
             self.last_report = []
+        notes = take_notes()
+        if success and notes:
+            self.last_report = [*notes, *self.last_report]          # avisos medidos durante o job (fase, clipping) vêm primeiro
         self.job_finished.emit(success, message, outputs, paths, target)
         if success:
             detail = Path(outputs[0]).name if outputs else 'concluído'

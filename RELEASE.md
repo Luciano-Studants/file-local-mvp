@@ -1,3 +1,11 @@
+# Arquivo Local 0.9.45-phase2-dev — Áudio: canais
+
+## Novidades da 0.9.45 (categoria Áudio, item 5)
+- Nova ferramenta Áudio › Ajustar › **Canais** (`Audio Channels`): mono (mistura), estéreo (surround vira estéreo; mono é duplicado), só o canal esquerdo ou só o direito. Recodifica no mesmo formato (MP3, M4A, FLAC, OGG, Opus, WAV, AIFF) mantendo etiquetas e, em MP3/M4A/FLAC, a capa. Saída `-mono`, `-estereo`, `-esquerdo` ou `-direito`.
+- **Avisos medidos de verdade:** fase (o mono ficou mais de 6 dB abaixo do estéreo → aviso; quase mudo ou mudo → o app **recusa** e sugere esquerdo/direito) e clipping (mistura de surround acima de 0 dBFS → volume reduzido o mínimo e avisado). Os avisos aparecem no relatório do resultado.
+- Os avisos voltam do worker (`notes`), sem mudar o formato das saídas; módulo novo `audiochannels.py`; `tests/test_audiochannels.py` (39 testes, FFmpeg real).
+- Roda do Áudio com 3 grupos: Ler, Converter, Ajustar.
+
 # Arquivo Local 0.9.44-phase2-dev — Áudio: metadados
 
 ## Novidades da 0.9.44 (categoria Áudio, item 4)

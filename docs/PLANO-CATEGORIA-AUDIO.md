@@ -16,7 +16,7 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 | 2 | **Informações do áudio:** painel com duração, codec, taxa, canais, etiquetas, capa; vários arquivos; leitura no worker (`audio_info`) | ✅ 0.9.43 |
 | 3 | **Converter:** MP3, M4A/AAC, FLAC, OGG/Vorbis, Opus, WAV, AIFF; qualidade (bitrate/VBR/nível FLAC); relatório de perdas; publicação atômica; limite próprio de tamanho | ✅ 0.9.43 |
 | 4 | **Metadados:** ver tudo; remover/editar só etiquetas permitidas; capa | ✅ 0.9.44 |
-| 5 | **Canais:** mono/estéreo, downmix explícito, aviso de clipping/fase | |
+| 5 | **Canais:** mono/estéreo, downmix explícito, aviso de clipping/fase | ✅ 0.9.45 |
 | 6 | **Cortar:** início/fim com onda visual; silêncio só nas pontas | |
 | 7 | **Normalizar volume:** EBU R128 (loudnorm em duas passadas); recusa alvos que causam clipping | |
 | 8 | **Comprimir:** bitrate-alvo, tamanho como melhor esforço | |
@@ -58,3 +58,12 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 - Capa: MP3, M4A e FLAC mantêm ou removem. **OGG/Opus com capa** só podem ser reescritos removendo a capa (o FFmpeg lê a capa mas não a regrava); a mensagem diz isso. WAV/AIFF não têm capa.
 - «Limpar tudo» remove todas as etiquetas, a capa e os capítulos. Com vários arquivos só «Limpar tudo» e «Remover capa» valem (campos de texto exigem um arquivo).
 - Conferência antes de publicar: mesmo codec e duração, campos pedidos gravados, campos removidos ausentes, campos não editados preservados, capa conforme pedido. WAV/AIFF guardam poucos campos: se o formato não aceita um campo (ex.: gênero no AIFF), nada é salvo e a mensagem diz qual.
+
+### Item 5 — Canais (0.9.45)
+- Núcleo `audiochannels.py` (sem Qt): `options_from` (`chan_mode` mono/stereo/left/right + `audio_quality`), `plan` (valida o modo contra os canais do arquivo e escolhe o filtro), `measure` (passadas só de decodificação com `astats`), `build_args`, `notes`, `apply`.
+- Modos: **Mono** (estéreo: `pan=mono|c0=0.5*c0+0.5*c1`; surround: `aresample=ochl=mono`), **Estéreo** (surround → `aresample=ochl=stereo`; mono → duplicado, sem ganho real), **Só esquerdo / Só direito** (só em estéreo). Pedidos sem sentido (mono → mono, estéreo → estéreo, esquerdo em surround) são recusados com mensagem.
+- **Recodifica** no mesmo formato do arquivo (decidido pelo ffprobe: MP3, M4A, FLAC, OGG, Opus, WAV, AIFF); qualidade pelos mesmos níveis da conversão; etiquetas mantidas; capa copiada em MP3/M4A/FLAC (OGG/Opus: limite do FFmpeg, avisado); capítulos não vão. Saída `<nome>-mono|-estereo|-esquerdo|-direito.<ext>`.
+- **Fase (estéreo → mono):** mede o RMS do estéreo e do mono. Mono > 6 dB abaixo → **aviso**; > 15 dB abaixo ou mudo (oposição de fase) → **recusa**, sugerindo «Só esquerdo/Só direito». Fonte silenciosa não é problema de fase.
+- **Clipping (surround → mono/estéreo):** mede o pico da mistura; se passar de −0,3 dBFS reduz o volume o mínimo necessário (`volume=-X dB`) e avisa; excesso absurdo (> 24 dB) é recusado.
+- **Avisos medidos voltam do worker:** `engine.RUN_NOTES` → campo opcional `notes` na resposta do worker → `runner.LAST_NOTES`/`take_notes()` → `JobController.last_report` (os avisos vêm antes do relatório estático). O formato `outputs` não mudou, e as leituras de interface (`audio_info`) não tocam nas notas.
+- Roda: novo grupo **Ajustar › Canais** (`AUDIO_GROUPS['adjust']`); a roda de primeiro nível passou a ter 3 fatias (Ler, Converter, Ajustar).

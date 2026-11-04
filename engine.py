@@ -4,6 +4,7 @@ import struct
 import errno, json, os, re, shutil, stat, tempfile, warnings
 from pathlib import Path
 
+import audiochannels
 import audioconvert
 import audiotags
 import bgremove
@@ -20,7 +21,9 @@ MAX_BYTES = 100 * 1024 * 1024
 AUDIO_MAX_BYTES = 512 * 1024 * 1024      # áudio e vídeo de entrada (o arquivo é lido em fluxo pelo FFmpeg, não carregado na memória)
 AUDIO_CONVERT='Convert Audio'
 AUDIO_TAGS='Audio Tags'
-AUDIO_TARGETS=(AUDIO_CONVERT,AUDIO_TAGS)
+AUDIO_CHANNELS='Audio Channels'
+AUDIO_TARGETS=(AUDIO_CONVERT,AUDIO_TAGS,AUDIO_CHANNELS)
+RUN_NOTES=[]      # avisos medidos durante o job (fase, clipping…): o worker os devolve junto das saídas e a interface os soma ao relatório
 MAX_PIXELS = 40_000_000
 MAX_OUTPUT = 512 * 1024 * 1024
 COLLAGE_MIN, COLLAGE_MAX = 2, 12
@@ -52,6 +55,7 @@ BACKDROP_RATIOS = {'auto': None, '1:1': (1, 1), '16:9': (16, 9), '4:5': (4, 5)}
 TOOL_SUFFIX = {spec.target: spec.suffix for spec in tool_registry.IMAGE_TOOLS if spec.suffix}
 TOOL_SUFFIX[AUDIO_CONVERT]='convertido'
 TOOL_SUFFIX[AUDIO_TAGS]='etiquetas'
+TOOL_SUFFIX[AUDIO_CHANNELS]='canais'
 RESIZE_MODES = ('percent', 'fit', 'exact')
 RESIZE_MAX_SIDE = 10000
 WATERMARK_POSITIONS = ('tl','tc','tr','ml','c','mr','bl','bc','br','tile')   # cantos, bordas, centro e repetida na diagonal
@@ -66,7 +70,7 @@ ROTATE_ANGLES = (0, 90, 180, 270)      # graus no sentido horário
 ADJUST_RANGE = 100
 REDACT_MAX_REGIONS = 50
 REDACT_MODES = ('black', 'pixelate')
-OPERATIONS = list(IMAGE_OUTPUTS) + ['Image → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF', AUDIO_CONVERT, AUDIO_TAGS]
+OPERATIONS = list(IMAGE_OUTPUTS) + ['Image → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF', AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS]
 RENAMEABLE_TARGETS = frozenset(IMAGE_OUTPUTS) | {'Image → PDF'}      # a colagem usa o mesmo padrão, com {nome} = «colagem»
 class ConversionError(ValueError): pass
 
@@ -491,7 +495,7 @@ REDACT_DEFAULT_DPI=200
 PDF_UNPROTECT='Unprotect PDF'
 PASSWORD_MIN=4
 STAMP_KINDS=('text','watermark')
-PDF_LONG_TARGETS=('PDF OCR → PDF','PDF OCR → Text','Compress PDF','Redact PDF','Convert Audio')      # jobs que podem passar do tempo padrão do runner
+PDF_LONG_TARGETS=('PDF OCR → PDF','PDF OCR → Text','Compress PDF','Redact PDF','Convert Audio','Audio Channels')      # jobs que podem passar do tempo padrão do runner
 PDF_OCR_PDF='PDF OCR → PDF'
 PDF_OCR_TEXT='PDF OCR → Text'
 PDF_OCR_TARGETS=(PDF_OCR_PDF,PDF_OCR_TEXT)
@@ -1178,6 +1182,14 @@ def loss_report(paths, target, options=None):
         notes.append('A marca d\'água é desenhada por cima do conteúdo (não por baixo) e pode ser removida por quem editar o PDF: não serve como proteção.' if str(options.get('stamp_kind') or 'text')=='watermark' else 'O carimbo pode cobrir parte do conteúdo se a margem for pequena; confira a posição.')
         notes.append('Assinaturas digitais ficam inválidas (o arquivo foi reescrito); marcadores e anexos são mantidos.')
         return notes
+    if target==AUDIO_CHANNELS:
+        try: mode,quality=audiochannels.options_from(options)
+        except audioconvert.MediaError as error: return [str(error)]
+        info=None
+        try:
+            if paths: info=audioconvert.mediatools.probe(source_file(paths[0],AUDIO_MAX_BYTES))
+        except (audioconvert.MediaError,ConversionError,OSError): info=None
+        return audiochannels.notes(info,mode,quality)
     if target==AUDIO_TAGS:
         try: mode,cover,edits=audiotags.options_from(options)
         except audioconvert.MediaError as error: return [str(error)]
@@ -1407,6 +1419,7 @@ def read_pdf(p):
     except pdfinfo.PdfError as error: raise ConversionError(f'{Path(p).name}: {error}') from error
 
 def convert(job):
+    del RUN_NOTES[:]
     previous=VECTOR_WIDTH
     set_vector_width(vector_width_from(job))
     try: return _convert(job)
@@ -1564,6 +1577,11 @@ def _convert(job):
         elif target==PDF_STAMP:
             if p.suffix.lower()!='.pdf': raise ConversionError('Selecione somente arquivos PDF.')
             results.extend(pdf_stamp(p,read_pdf(p),job,folder,stage))
+        elif target==AUDIO_CHANNELS:
+            try: done=audiochannels.apply(p,stage,job)
+            except audioconvert.MediaError as error: raise ConversionError(f'{p.name}: {error}') from error
+            RUN_NOTES.extend(done['notes'])
+            results.append(publish(stage,folder,p.stem+'-'+done['name'],done['suffix']))
         elif target==AUDIO_TAGS:
             try: done=audiotags.apply(p,stage,job)
             except audioconvert.MediaError as error: raise ConversionError(f'{p.name}: {error}') from error
@@ -2279,7 +2297,9 @@ def worker_main():
             import mediatools
             result={'ok':True,'outputs':mediatools.run_op(job,lambda raw: source_file(raw,AUDIO_MAX_BYTES))}       # leitura de áudio para a interface (informações), sem gerar arquivo
         elif isinstance(job,dict) and job.get('op'): result={'ok':True,'outputs':pdfinfo.run_op(job,source_file)}       # leitura de PDF para a interface (informações e prévia), sem gerar arquivo do usuário
-        else: result={'ok':True,'outputs':convert(job)}
+        else:
+            result={'ok':True,'outputs':convert(job)}
+            if RUN_NOTES: result['notes']=[str(n)[:400] for n in RUN_NOTES[:10]]
     except Exception as e: result={'ok':False,'error':str(e)[:1000] or type(e).__name__}
     print(json.dumps(result,ensure_ascii=True),flush=True)
     return 0 if result['ok'] else 1

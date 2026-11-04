@@ -8,6 +8,13 @@ import winjob
 
 class Cancelled(Exception): pass
 
+LAST_NOTES=[]      # avisos do último job (o worker os devolve em «notes»); a interface os lê com take_notes() depois do job
+
+def take_notes():
+    notes=list(LAST_NOTES)
+    del LAST_NOTES[:]
+    return notes
+
 def worker_command():
     if getattr(sys,'frozen',False): return [sys.executable,'--worker']
     executable=sys.executable
@@ -32,6 +39,7 @@ def stop(proc):
     except (OSError,subprocess.TimeoutExpired):pass
 
 def run_job(job,cancel=None,timeout=180,command=None):
+    del LAST_NOTES[:]
     with ExitStack() as cleanup:
         job=dict(job)
         if job.get('paths'):
@@ -88,6 +96,7 @@ def _run_job(job,cancel=None,timeout=180,command=None):
             result=json.loads(out.read(131073))
             if not result.get('ok'): raise ValueError(result.get('error','A conversão falhou.'))
             if proc.returncode!=0: raise ValueError('O worker de conversão terminou de forma inesperada.')
+            if result.get('notes'): LAST_NOTES[:]=[str(n)[:400] for n in result['notes'][:10]]
             return result['outputs']
         except (json.JSONDecodeError,UnicodeDecodeError) as e:
             raise ValueError('O worker de conversão falhou. O arquivo pode não ser suportado ou exceder os limites de recursos.') from e
