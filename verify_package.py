@@ -39,6 +39,7 @@ required = [
     'ArquivoLocal/source/Desktop/ocr.py',
     'ArquivoLocal/source/Desktop/mediatools.py',
     'ArquivoLocal/source/Desktop/audioconvert.py',
+    'ArquivoLocal/source/Desktop/audiotags.py',
     'ArquivoLocal/source/Desktop/audio_stage.py',
     'ArquivoLocal/source/Desktop/bgremove.py',
     'ArquivoLocal/source/Desktop/winjob.py',

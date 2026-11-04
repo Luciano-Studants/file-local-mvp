@@ -15,7 +15,7 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 | 1 | **Base de mídia:** localizar FFmpeg/ffprobe, licença do build, leitura segura | ✅ 0.9.43 |
 | 2 | **Informações do áudio:** painel com duração, codec, taxa, canais, etiquetas, capa; vários arquivos; leitura no worker (`audio_info`) | ✅ 0.9.43 |
 | 3 | **Converter:** MP3, M4A/AAC, FLAC, OGG/Vorbis, Opus, WAV, AIFF; qualidade (bitrate/VBR/nível FLAC); relatório de perdas; publicação atômica; limite próprio de tamanho | ✅ 0.9.43 |
-| 4 | **Metadados:** ver tudo; remover/editar só etiquetas permitidas; capa | |
+| 4 | **Metadados:** ver tudo; remover/editar só etiquetas permitidas; capa | ✅ 0.9.44 |
 | 5 | **Canais:** mono/estéreo, downmix explícito, aviso de clipping/fase | |
 | 6 | **Cortar:** início/fim com onda visual; silêncio só nas pontas | |
 | 7 | **Normalizar volume:** EBU R128 (loudnorm em duas passadas); recusa alvos que causam clipping | |
@@ -49,3 +49,12 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 - Só a primeira faixa de áudio é convertida (`-map 0:a:0 -vn -sn -dn`); capa e capítulos não vão; MP3 com mais de 2 canais é mixado para estéreo.
 - Conferência antes de publicar: codec esperado, 1 fluxo de áudio, sem vídeo, duração dentro de 2 % (ou 1 s). Falhou → nada é salvo. Publicação por `engine.publish` (nome `<nome>-convertido.<ext>`, nunca sobrescreve).
 - Relatório de perdas (`engine.loss_report`) lê o arquivo real e avisa: formato com perda, 24 bits → 16 bits, vídeo descartado, faixas extras, downmix, capa/capítulos, mesmo formato de origem, etiquetas.
+
+### Item 4 — Metadados (0.9.44)
+- Núcleo `audiotags.py` (sem Qt): `options_from` (`tag_mode` edit/clear, `tag_cover` keep/drop, um `tag_<campo>` por campo editável), `kind_of`, `build_args`, `notes`, `apply`. O áudio é **copiado** (`-c copy`): nada é recodificado (os testes comparam o hash do PCM decodificado antes e depois).
+- Campos editáveis: título, artista, álbum, artista do álbum, data (AAAA, AAAA-MM, AAAA-MM-DD), gênero, faixa e disco («n» ou «n/total»), compositor e comentário; até 200 caracteres, sem caracteres de controle. Só os campos **presentes no pedido** mudam; valor vazio remove o campo; os outros campos do arquivo (inclusive os que o app não edita) são mantidos.
+- «Ver tudo»: a tela de informações agora lista também as «Outras» etiquetas (até 40) e reconhece capa de OGG/Opus.
+- Formatos: MP3, M4A (AAC/ALAC), FLAC, OGG (Vorbis), Opus, WAV, AIFF — decididos pelo `ffprobe`, nunca pela extensão. Vídeo, várias faixas de áudio e outros formatos são recusados (a cópia não pode perder nada). Saída `<nome>-etiquetas.<ext>`.
+- Capa: MP3, M4A e FLAC mantêm ou removem. **OGG/Opus com capa** só podem ser reescritos removendo a capa (o FFmpeg lê a capa mas não a regrava); a mensagem diz isso. WAV/AIFF não têm capa.
+- «Limpar tudo» remove todas as etiquetas, a capa e os capítulos. Com vários arquivos só «Limpar tudo» e «Remover capa» valem (campos de texto exigem um arquivo).
+- Conferência antes de publicar: mesmo codec e duração, campos pedidos gravados, campos removidos ausentes, campos não editados preservados, capa conforme pedido. WAV/AIFF guardam poucos campos: se o formato não aceita um campo (ex.: gênero no AIFF), nada é salvo e a mensagem diz qual.
