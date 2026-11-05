@@ -17,7 +17,7 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 | 3 | **Converter:** MP3, M4A/AAC, FLAC, OGG/Vorbis, Opus, WAV, AIFF; qualidade (bitrate/VBR/nível FLAC); relatório de perdas; publicação atômica; limite próprio de tamanho | ✅ 0.9.43 |
 | 4 | **Metadados:** ver tudo; remover/editar só etiquetas permitidas; capa | ✅ 0.9.44 |
 | 5 | **Canais:** mono/estéreo, downmix explícito, aviso de clipping/fase | ✅ 0.9.45 |
-| 6 | **Cortar:** início/fim com onda visual; silêncio só nas pontas | |
+| 6 | **Cortar:** início/fim com onda visual; silêncio só nas pontas | ✅ 0.9.46 |
 | 7 | **Normalizar volume:** EBU R128 (loudnorm em duas passadas); recusa alvos que causam clipping | |
 | 8 | **Comprimir:** bitrate-alvo, tamanho como melhor esforço | |
 | 9 | **Bleep:** intervalos validados, tom sintético; cópia nova, não é anonimização criptográfica | |
