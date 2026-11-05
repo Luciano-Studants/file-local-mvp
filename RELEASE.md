@@ -1,3 +1,11 @@
+# Arquivo Local 0.9.46-phase2-dev — Áudio: cortar
+
+## Novidades da 0.9.46 (categoria Áudio, item 6)
+- Nova ferramenta Áudio › **Editar › Cortar** (`Audio Trim`): **início e fim** (arraste as alças na onda ou digite os tempos) ou **silêncio das pontas** (remove só o do começo e do fim; o do meio nunca é tocado; aceita vários arquivos).
+- MP3, M4A, OGG e Opus: corte **sem recodificar** (sem perda; erro de até ~40 ms) ou «Exato» (recodifica). FLAC, WAV e AIFF: sempre exato e sem perda. Etiquetas mantidas; capa mantida em MP3/M4A/FLAC (passo extra de cópia); capítulos não são copiados (avisado).
+- Onda desenhada a partir de picos calculados no worker (FFmpeg → mono 4 kHz, só os picos ficam na memória); silêncio das pontas medido com `silencedetect` (tolera CRLF do Windows).
+- Módulos novos `audiotrim.py` e `audio_wave.py`; roda do Áudio com 4 grupos (Ler, Converter, Editar, Ajustar); `tests/test_audiotrim.py` (39 testes, FFmpeg real).
+
 # Arquivo Local 0.9.45-phase2-dev — Áudio: canais
 
 ## Novidades da 0.9.45 (categoria Áudio, item 5)

@@ -306,7 +306,7 @@ class RegistrationTests(unittest.TestCase):
         import tool_registry
         self.assertIn(engine.AUDIO_CHANNELS, engine.OPERATIONS); self.assertIn(engine.AUDIO_CHANNELS, engine.PDF_LONG_TARGETS)
         self.assertIn('chan_mode', tool_registry.BASE_STR_OPTIONS)
-        self.assertEqual(list(tool_registry.AUDIO_GROUPS), ['read', 'convert', 'adjust'])
+        self.assertEqual(list(tool_registry.AUDIO_GROUPS), ['read', 'convert', 'edit', 'adjust'])
         self.assertEqual([m[0] for m in tool_registry.AUDIO_GROUPS['adjust'][3]], [engine.AUDIO_CHANNELS])
 
     def test_report_gets_the_worker_warnings_first(self):

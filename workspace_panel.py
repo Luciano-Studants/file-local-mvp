@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QDesktopServices, QIcon, QImage, QPixmap, QTra
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
-    QPushButton, QProgressBar, QScrollArea, QSpinBox, QStackedWidget,
+    QPushButton, QProgressBar, QScrollArea, QDoubleSpinBox, QSpinBox, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 
@@ -34,6 +34,7 @@ from pdf_stage import PdfStage
 import audiochannels
 import audioconvert
 import audiotags
+import audiotrim
 from audio_stage import AudioStage
 import mediatools
 from page_organizer import PageOrganizer
@@ -60,6 +61,7 @@ AUDIO_INFO = tool_registry.AUDIO_INFO      # ferramenta de leitura: não gera ar
 AUDIO_CONVERT = tool_registry.AUDIO_CONVERT
 AUDIO_TAGS = tool_registry.AUDIO_TAGS
 AUDIO_CHANNELS = tool_registry.AUDIO_CHANNELS
+AUDIO_TRIM = tool_registry.AUDIO_TRIM
 READONLY_TOOLS = frozenset({AUDIO_INFO})
 AUDIO_SUFFIXES = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '.aiff', '.aif', '.wma'}
 
@@ -87,6 +89,7 @@ TOOLS = {
         (AUDIO_CONVERT, 'Converter', 'Converter para MP3, M4A, FLAC, OGG, Opus, WAV ou AIFF'),
         (AUDIO_TAGS, 'Metadados', 'Editar etiquetas, remover capa ou limpar tudo'),
         (AUDIO_CHANNELS, 'Canais', 'Mono, estéreo, só o canal esquerdo ou direito'),
+        (AUDIO_TRIM, 'Cortar', 'Escolher início e fim na onda ou remover o silêncio das pontas'),
     ],
     'pdf': [
         ('PDF → Text', 'Extrair texto', 'Exportar o texto das páginas'),
@@ -131,7 +134,7 @@ LABELS = {
     'Image → PDF': 'Imagem → PDF', **{spec.target: spec.panel_title for spec in tool_registry.IMAGE_TOOLS},
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Imagens embutidas no PDF', 'PDF → Images': 'Páginas do PDF em imagens',
     'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF', 'Stamp PDF': 'Numerar e carimbar o PDF', 'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Compress PDF': 'Comprimir PDF', 'Clean PDF': 'Metadados e cópia limpa do PDF', 'PDF OCR → PDF': 'PDF digitalizado → PDF pesquisável (OCR)', 'PDF OCR → Text': 'PDF digitalizado → texto (OCR)',
-    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Metadados do áudio', AUDIO_CHANNELS: 'Canais do áudio',
+    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Metadados do áudio', AUDIO_CHANNELS: 'Canais do áudio', AUDIO_TRIM: 'Cortar áudio',
     'Split PDF': 'Dividir e extrair páginas do PDF', 'Organize PDF': 'Organizar páginas do PDF', 'Merge PDFs': 'Unir PDFs',
 }
 FUTURE_SUFFIXES = {
@@ -549,6 +552,14 @@ class FeaturePanel(QMainWindow):
         self.ch_mode = ChipGroup(['Mono', 'Estéreo', 'Só esquerdo', 'Só direito'], per_row=2)
         self.ch_quality = ChipGroup(['Baixa', 'Média', 'Alta'], per_row=3); self.ch_quality.setCurrentIndex(1)
         self.ch_info = QLabel(''); self.ch_info.setWordWrap(True); self.ch_info.setTextFormat(Qt.TextFormat.PlainText)
+        self.tr_mode = ChipGroup(['Início e fim', 'Silêncio das pontas'], per_row=2)
+        self.tr_start = QDoubleSpinBox(); self.tr_end = QDoubleSpinBox()
+        for box in (self.tr_start, self.tr_end):
+            box.setDecimals(3); box.setSingleStep(0.1); box.setSuffix(' s'); box.setRange(0.0, float(mediatools.MAX_DURATION))
+        self.tr_exact = ChipGroup(['Sem recodificar', 'Exato'], per_row=2)
+        self.tr_quality = ChipGroup(['Baixa', 'Média', 'Alta'], per_row=3); self.tr_quality.setCurrentIndex(1)
+        self.tr_info = QLabel(''); self.tr_info.setWordWrap(True); self.tr_info.setTextFormat(Qt.TextFormat.PlainText)
+        self._tr_syncing = False
         self.at_mode = ChipGroup(['Editar', 'Limpar tudo'], per_row=2)
         self.at_cover = ChipGroup(['Manter', 'Remover'], per_row=2)
         self.at_info = QLabel(''); self.at_info.setWordWrap(True); self.at_info.setTextFormat(Qt.TextFormat.PlainText)
@@ -657,6 +668,7 @@ class FeaturePanel(QMainWindow):
                 ('sstart', 'Primeiro nº', self.st_start), ('spages', 'Páginas', self.st_pages), ('sinfo', 'Exemplo', self.st_info),
                 ('plevel', 'Nível', self.cp_level), ('pinfo', 'Resultado', self.cp_info),
                 ('aformat', 'Formato', self.ac_format), ('aquality', 'Qualidade', self.ac_quality), ('atags', 'Etiquetas', self.ac_tags), ('ainfo', 'Resultado', self.ac_info),
+                ('tmmode', 'Corte', self.tr_mode), ('tmstart', 'Início', self.tr_start), ('tmend', 'Fim', self.tr_end), ('tmexact', 'Precisão', self.tr_exact), ('tmquality', 'Qualidade', self.tr_quality), ('tminfo', 'Resultado', self.tr_info),
                 ('cmode', 'Canais', self.ch_mode), ('cquality', 'Qualidade', self.ch_quality), ('cinfo', 'Resultado', self.ch_info),
                 ('atmode', 'Modo', self.at_mode), ('atfields', 'Campos', self.at_scroll), ('atcover', 'Capa', self.at_cover), ('atinfo', 'Resultado', self.at_info),
                 ('kdetails', 'No arquivo', self.kl_details), ('kmeta', 'Metadados', self.kl_meta), ('kattach', 'Anexos', self.kl_attach), ('kjs', 'JavaScript', self.kl_js), ('kinfo', 'Resultado', self.kl_info),
@@ -786,6 +798,13 @@ class FeaturePanel(QMainWindow):
             control.valueChanged.connect(self._stamp_changed)
         for chips in (self.ac_format, self.ac_quality, self.ac_tags):
             chips.currentIndexChanged.connect(self._audioconvert_changed)
+        for chips in (self.tr_mode, self.tr_exact, self.tr_quality):
+            chips.currentIndexChanged.connect(self._audiotrim_changed)
+        for box in (self.tr_start, self.tr_end):
+            box.valueChanged.connect(self._audiotrim_box_changed)
+        self.audio_stage.wave.range_changed.connect(self._audiotrim_wave_changed)
+        self.audio_stage.wave.loaded.connect(self._audiotrim_loaded)
+        self.audio_stage.infos_ready.connect(self._audiotrim_changed)
         for chips in (self.ch_mode, self.ch_quality):
             chips.currentIndexChanged.connect(self._audiochannels_changed)
         self.audio_stage.infos_ready.connect(self._audiochannels_changed)
@@ -845,7 +864,7 @@ class FeaturePanel(QMainWindow):
     # categorias e rodas
     # ------------------------------------------------------------------
     def _capability_for(self, target: str):
-        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS):
+        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM):
             return self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
         key = 'images' if target in IMAGE_TARGETS or target.startswith(tool_registry.GROUP_PREFIX) else 'pdf'
         return self.controller.capabilities.get(key, (False, 'Dependência indisponível.'))
@@ -1041,17 +1060,23 @@ class FeaturePanel(QMainWindow):
         for control in (self.crop_x, self.crop_y, self.crop_width, self.crop_height):
             control.setValue(0)
         self.crop_help.setText('Arraste na imagem para definir a área.')
-        if target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS):
+        if target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM):
             self.file_preview.clear()
             self.pdf_stage.show_files([])
             audios = [path for path in self.files if Path(path).suffix.lower() in AUDIO_SUFFIXES or Path(path).suffix.lower() in ('.mp4', '.mkv', '.mov', '.webm')]
+            self.audio_stage.wave.setVisible(target == AUDIO_TRIM)
             if audios:
                 if self.audio_stage.paths != audios:
                     self.audio_stage.show_files(audios)
+                if target == AUDIO_TRIM and len(audios) == 1:
+                    self.audio_stage.wave.show_file(audios[0])
+                else:
+                    self.audio_stage.wave.reset()
                 self.stage.setCurrentIndex(STAGE_AUDIO)
             else:
+                self.audio_stage.wave.reset()
                 self.audio_stage.show_files([])
-                self._stage_message('Abra um arquivo de áudio para ver as informações.' if target == AUDIO_INFO else ('Abra um arquivo de áudio para editar as etiquetas.' if target == AUDIO_TAGS else ('Abra um arquivo de áudio para mudar os canais.' if target == AUDIO_CHANNELS else 'Abra um arquivo de áudio ou vídeo para converter.')))
+                self._stage_message('Abra um arquivo de áudio para ver as informações.' if target == AUDIO_INFO else ('Abra um arquivo de áudio para editar as etiquetas.' if target == AUDIO_TAGS else ('Abra um arquivo de áudio para mudar os canais.' if target == AUDIO_CHANNELS else ('Abra um arquivo de áudio para cortar.' if target == AUDIO_TRIM else 'Abra um arquivo de áudio ou vídeo para converter.'))))
             return
         if target not in IMAGE_TARGETS:
             self.file_preview.clear()
@@ -1304,6 +1329,7 @@ class FeaturePanel(QMainWindow):
             AUDIO_CONVERT: ('aformat', 'aquality', 'atags', 'ainfo'),
             AUDIO_TAGS: ('atmode', 'atfields', 'atcover', 'atinfo'),
             AUDIO_CHANNELS: ('cmode', 'cquality', 'cinfo'),
+            AUDIO_TRIM: ('tmmode', 'tmstart', 'tmend', 'tmexact', 'tmquality', 'tminfo'),
             PDF_CLEAN: ('kdetails', 'kmeta', 'kattach', 'kjs', 'kinfo'),
             PDF_OCR_PDF: ('olang', 'opsm', 'rpages', 'rskip', 'rinfo', 'ostatus'),
             PDF_OCR_TEXT: ('olang', 'opsm', 'rpages', 'rskip', 'rtext', 'rinfo', 'ostatus'),
@@ -1363,6 +1389,7 @@ class FeaturePanel(QMainWindow):
             'PDF → Images': 'Cada página vira uma imagem numerada («pagina-001») numa pasta nova ao lado do PDF. Resolução maior dá mais nitidez e arquivos bem maiores (limite de 40 megapixels por página). Texto e desenhos viram pixels; formulários e anotações não são desenhados. O PDF original não muda.',
             'Split PDF': 'Escolha como dividir: uma página por PDF, partes de N páginas, grupos de páginas (1-3; 4-6; 7-) ou extrair só algumas páginas para um PDF novo. Várias partes vão numeradas para uma pasta nova ao lado do original, que não muda. Anexos, formulários e assinaturas não são preservados.',
             'Organize PDF': 'Arraste as miniaturas para mudar a ordem; selecione uma ou várias (Ctrl ou Shift) para girar, duplicar, mover ou excluir. O resultado é um PDF novo, «<nome>-organizado.pdf»; o original não muda. Marcadores, anexos, formulários e assinaturas não são preservados.',
+            AUDIO_TRIM: 'Início e fim: arraste as alças na onda ou digite os tempos; fica só o trecho entre elas. Silêncio das pontas: remove só o silêncio do começo e do fim (o do meio não é tocado). «Sem recodificar» não perde qualidade, mas o corte cai no quadro de áudio mais próximo (até ~40 ms); «Exato» recodifica. FLAC, WAV e AIFF são sempre exatos e sem perda. Etiquetas e capa são mantidas. Gera «<nome>-cortado»; o original fica intacto.',
             AUDIO_CHANNELS: 'Mono (mistura os canais), Estéreo (surround vira estéreo; mono é duplicado), Só esquerdo ou Só direito (mantém um canal). O áudio é recodificado no mesmo formato (a qualidade vale para MP3, M4A, OGG e Opus). O app mede a fase e o pico: avisa se o mono ficar fraco, recusa se ficaria mudo e reduz o volume só se a mistura passar de 0 dBFS. Gera «<nome>-mono», «-estereo», «-esquerdo» ou «-direito»; o original fica intacto.',
             AUDIO_TAGS: 'Edita título, artista, álbum e outros campos, remove a capa ou limpa todas as etiquetas, SEM recodificar o áudio (nenhuma perda de qualidade). Campo em branco = removido; os campos que o app não edita são mantidos. Gera «<nome>-etiquetas» ao lado do original, que fica intacto. Com vários arquivos só «Limpar tudo» e «Remover capa» estão disponíveis.',
             AUDIO_CONVERT: 'Converte a primeira faixa de áudio (ou o áudio de um vídeo) para MP3, M4A, FLAC, OGG, Opus, WAV ou AIFF, sem internet. A qualidade vale só para os formatos com perda (MP3, M4A, OGG, Opus). Gera «<nome>-convertido» ao lado do original, que fica intacto.',
@@ -1371,7 +1398,7 @@ class FeaturePanel(QMainWindow):
         }
         self.tool_hint.setText(hints.get(target, 'A operação cria um novo arquivo; o original fica intacto.'))
         self.run_button.setText(self._run_text(target) if target in tool_registry.FORMAT_TARGETS else {**{spec.target: spec.run_label for spec in tool_registry.IMAGE_TOOLS},
-                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Salvar etiquetas', AUDIO_CHANNELS: 'Mudar os canais', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
+                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Salvar etiquetas', AUDIO_CHANNELS: 'Mudar os canais', AUDIO_TRIM: 'Cortar o áudio', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
         if target == 'Split PDF':
             self._split_changed()
         if target == 'Organize PDF':
@@ -1397,6 +1424,8 @@ class FeaturePanel(QMainWindow):
             self._audiotags_changed()
         if target == AUDIO_CHANNELS:
             self._audiochannels_changed()
+        if target == AUDIO_TRIM:
+            self._audiotrim_changed()
         if target == PDF_STAMP:
             self._stamp_changed()
         if target == PDF_REDACT:
@@ -2223,6 +2252,114 @@ class FeaturePanel(QMainWindow):
         text, ready = self._audiochannels_state()
         self.ch_info.setText(text)
         self.run_button.setEnabled(ready)
+
+    # --- Cortar áudio ----------------------------------------------------------
+    def _audiotrim_values(self) -> dict:
+        silence = self.tr_mode.currentIndex() == 1
+        values = {'trim_mode': 'silence' if silence else 'range', 'trim_exact': 'yes' if self.tr_exact.currentIndex() == 1 else 'no',
+                  'audio_quality': ('low', 'medium', 'high')[max(0, self.tr_quality.currentIndex())]}
+        if not silence:
+            duration = self._audiotrim_duration()
+            end = self.tr_end.value()
+            values['trim_start_ms'] = int(round(self.tr_start.value() * 1000))
+            values['trim_end_ms'] = 0 if duration and end >= duration - 0.0005 else int(round(end * 1000))
+        return values
+
+    def _audiotrim_duration(self) -> float:
+        if len(self.files) != 1 or not self.audio_stage.infos:
+            return 0.0
+        info = next(iter(self.audio_stage.infos.values()))
+        return 0.0 if info.get('error') else float(info.get('duration') or 0)
+
+    def _audiotrim_state(self):
+        if not self.files:
+            return 'Abra um arquivo de áudio.', False
+        capability = self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
+        if not capability[0]:
+            return capability[1], False
+        if not self.audio_stage.infos:
+            return 'Lendo o arquivo…', False
+        values = self._audiotrim_values()
+        silence = values['trim_mode'] == 'silence'
+        many = len(self.files) > 1
+        if many and not silence:
+            return 'Para escolher início e fim, abra um arquivo só. («Silêncio das pontas» aceita vários arquivos.)', False
+        for path, info in self.audio_stage.infos.items():
+            prefix = f'{Path(path).name}: ' if many else ''
+            if info.get('error'):
+                return prefix + str(info['error']), False
+            try:
+                kind = audiotags.kind_of(info)
+            except mediatools.MediaError as error:
+                return prefix + str(error), False
+            if not silence:
+                try:
+                    audiotrim.plan_cut('range', values['trim_start_ms'], values['trim_end_ms'], float(info.get('duration') or 0), None)
+                except mediatools.MediaError as error:
+                    return prefix + str(error), False
+        if silence:
+            data = self.audio_stage.wave.data
+            edges = data.get('silence') if data and not many else None
+            lines = [f'{len(self.files)} arquivos: cada um é cortado à parte. '] if many else []
+            if edges:
+                lines.append(f'Silêncio medido: {audiotrim.fmt_time(edges["lead"])} no começo e {audiotrim.fmt_time(edges["tail"])} no fim.')
+                if edges['lead'] < audiotrim.SILENCE_MIN and edges['tail'] < audiotrim.SILENCE_MIN:
+                    return ' '.join(lines) + ' Não há silêncio para cortar nas pontas.', False
+            else:
+                lines.append('O app mede o silêncio das pontas ao cortar e recusa se não houver.')
+            return ' '.join(lines), True
+        info = next(iter(self.audio_stage.infos.values()))
+        duration = float(info.get('duration') or 0)
+        start = values['trim_start_ms'] / 1000
+        end = (values['trim_end_ms'] / 1000) or duration
+        lines = [f'Fica {audiotrim.fmt_time(end - start)} de {audiotrim.fmt_time(duration)} (de {audiotrim.fmt_time(start)} a {audiotrim.fmt_time(end)}).']
+        label = audioconvert.FORMATS[kind]['label']
+        if kind in audiotrim.LOSSLESS:
+            lines.append(f'{label}: corte exato e sem perda.')
+        elif values['trim_exact'] == 'yes':
+            lines.append(f'Corte exato: recodifica em {label} (com perda, ≈ {audioconvert.BITRATES[kind][values["audio_quality"]]} kbps).')
+        else:
+            lines.append('Sem recodificar: nenhuma perda; erro de até ~40 ms no ponto de corte.')
+        return ' '.join(lines), True
+
+    def _audiotrim_changed(self, *_args):
+        if self.selected_tool != AUDIO_TRIM:
+            return
+        silence = self.tr_mode.currentIndex() == 1
+        for box in (self.tr_start, self.tr_end):
+            box.setEnabled(not silence)
+        self.audio_stage.wave.view.setEnabled(not silence)
+        text, ready = self._audiotrim_state()
+        self.tr_info.setText(text)
+        self.run_button.setEnabled(ready)
+
+    def _audiotrim_loaded(self):
+        """A onda chegou: limites dos campos = duração; alças nas pontas."""
+        if self.selected_tool != AUDIO_TRIM:
+            return
+        duration = float(self.audio_stage.wave.data.get('duration') or 0)
+        self._tr_syncing = True
+        for box in (self.tr_start, self.tr_end):
+            box.setMaximum(duration or float(mediatools.MAX_DURATION))
+        self.tr_start.setValue(0.0); self.tr_end.setValue(duration)
+        self._tr_syncing = False
+        self._audiotrim_changed()
+
+    def _audiotrim_wave_changed(self, start: float, end: float):
+        if self._tr_syncing:
+            return
+        self._tr_syncing = True
+        self.tr_start.setValue(start); self.tr_end.setValue(end)
+        self._tr_syncing = False
+        self._audiotrim_changed()
+
+    def _audiotrim_box_changed(self, *_args):
+        if self._tr_syncing:
+            return
+        self._tr_syncing = True
+        self.audio_stage.wave.view.set_range(self.tr_start.value(), self.tr_end.value())
+        self._tr_syncing = False
+        self._audiotrim_changed()
 
     # --- Metadados do áudio ---------------------------------------------------
     def _audiotags_values(self) -> dict:
@@ -3291,6 +3428,11 @@ class FeaturePanel(QMainWindow):
             if not ready:
                 self.status.setText(text); return
             options.update(self._redact_values())
+        if target == AUDIO_TRIM:
+            text, ready = self._audiotrim_state()
+            if not ready:
+                self.status.setText(text); return
+            options.update(self._audiotrim_values())
         if target == AUDIO_CHANNELS:
             text, ready = self._audiochannels_state()
             if not ready:

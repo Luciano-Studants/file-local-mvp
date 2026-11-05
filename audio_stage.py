@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QLabel, QListWidget, QListWidgetItem, QScrollArea,
 
 import mediatools
 import runner
+from audio_wave import WavePanel
 
 ROLE_PATH = Qt.ItemDataRole.UserRole
 
@@ -67,6 +68,9 @@ class AudioStage(QWidget):
         layout.addWidget(scroll, 1)
         self.note = QLabel(''); self.note.setObjectName('Caption'); self.note.setWordWrap(True)
         layout.addWidget(self.note)
+        self.wave = WavePanel()               # só aparece em «Cortar»
+        self.wave.hide()
+        layout.addWidget(self.wave)
         self.files.hide()
         self.paths: list[str] = []
         self.infos: dict[str, dict] = {}
@@ -161,6 +165,7 @@ class AudioStage(QWidget):
 
     def shutdown(self):
         """Espera as threads de leitura terminarem (o worker tem tempo máximo); usado ao fechar o painel e nos testes."""
+        self.wave.shutdown()
         for task in self._tasks:
             if task.isRunning():
                 task.wait(5000)
