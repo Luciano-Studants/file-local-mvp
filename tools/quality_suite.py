@@ -1,4 +1,4 @@
-"""Portão B — suíte de qualidade das categorias Imagens (0.9.26) e PDF (0.9.42).
+"""Portão B — suíte de qualidade das categorias Imagens (0.9.26), PDF (0.9.42) e Áudio (0.9.51).
 
 Roda o motor (`engine.convert`) sobre um corpus determinístico e mede **qualidade e segurança das saídas**, não só «se não quebrou»:
 fidelidade (exato nos formatos sem perda; PSNR/SSIM nos com perda), geometria, ordem, privacidade de metadados, robustez a entradas
@@ -8,7 +8,7 @@ estranhas, determinismo, desempenho. Gera `quality-report.md` e `quality-report.
     python tools/quality_suite.py --out pasta      # outra pasta
     python tools/quality_suite.py --corpus pasta   # só grava o corpus de imagens de teste (para testar à mão no painel)
     python tools/quality_suite.py --fast           # pula as seções de desempenho (12 MP; 50 páginas de PDF)
-    python tools/quality_suite.py --only pdf       # só a categoria PDF (ou --only images)
+    python tools/quality_suite.py --only pdf       # só a categoria PDF (ou --only images, --only audio)
 
 Sai com código 1 se algum critério **bloqueante** falhar. Cada verificação aparece como PASSOU / FALHOU / PULADA (dependência ausente,
 com o motivo); nada é dado como aprovado sem ter sido medido. Rodar no Windows e no Linux: os resultados dos dois valem separadamente.
@@ -965,10 +965,407 @@ def pdf_performance(c):
         record('PDF — desempenho', 'pico de memória do processo ≤ 1500 MB', peak <= 1500, f'{peak:.0f} MB', blocking=False)
 
 
+# ───────────────────────── Áudio (Portão B, 0.9.51) ─────────────────────────
+# Oráculo independente: o FFmpeg decodifica as saídas para PCM e o numpy mede (frequência dominante, nível, energia por faixa, igualdade de amostras).
+# Nada aqui reutiliza o código que está sendo testado para «medir».
+import subprocess
+
+import mediatools
+
+FFMPEG = mediatools.find_tool('ffmpeg')
+FFPROBE = mediatools.find_tool('ffprobe')
+
+
+def ff(*args, timeout=120):
+    done = subprocess.run([FFMPEG, '-hide_banner', '-nostdin', '-v', 'error', '-y', *args], stdin=subprocess.DEVNULL, capture_output=True, timeout=timeout)
+    if done.returncode != 0:
+        raise RuntimeError(done.stderr.decode('utf8', 'replace')[-300:])
+    return done.stdout
+
+
+def pcm(path, rate=16000, channels=1, start=None, length=None, pan=None):
+    """Amostras float [-1, 1] (canais × amostras) decodificadas pelo FFmpeg."""
+    args = []
+    if start is not None: args += ['-ss', str(start)]
+    if length is not None: args += ['-t', str(length)]
+    args += ['-i', str(path), '-map', '0:a:0', '-vn']
+    if pan: args += ['-af', pan]
+    args += ['-ac', str(channels), '-ar', str(rate), '-f', 's16le', '-']
+    raw = ff(*args)
+    data = np.frombuffer(raw[:len(raw) // 2 * 2], dtype='<i2').astype(np.float64) / 32768
+    return data.reshape(-1, channels).T if len(data) else np.zeros((channels, 0))
+
+
+def peak_hz(samples, rate=16000):
+    if len(samples) < 256: return 0.0
+    spectrum = np.abs(np.fft.rfft((samples - samples.mean()) * np.hanning(len(samples))))
+    return float(np.fft.rfftfreq(len(samples), 1 / rate)[int(np.argmax(spectrum))])
+
+
+def band_ratio(samples, hz, rate=16000, width=0.1):
+    window = (samples - samples.mean()) * np.hanning(len(samples))
+    power = np.abs(np.fft.rfft(window)) ** 2
+    freqs = np.fft.rfftfreq(len(samples), 1 / rate)
+    return float(power[(freqs >= hz * (1 - width)) & (freqs <= hz * (1 + width))].sum() / max(power.sum(), 1e-30))
+
+
+def level_db(samples):
+    return 20 * math.log10(max(math.sqrt(float((samples ** 2).mean())), 1e-9)) if len(samples) else -120.0
+
+
+def duration_of(path):
+    return float(mediatools.probe(Path(path))['duration'])
+
+
+def decodes_cleanly(path):
+    done = subprocess.run([FFMPEG, '-hide_banner', '-nostdin', '-v', 'error', '-i', str(path), '-f', 'null', '-'], stdin=subprocess.DEVNULL, capture_output=True, timeout=300)
+    return done.returncode == 0 and not done.stderr.strip()
+
+
+def loudness(path):
+    """Loudness integrada (LUFS) e pico verdadeiro pelo `loudnorm` em modo de medida."""
+    done = subprocess.run([FFMPEG, '-hide_banner', '-nostdin', '-i', str(path), '-af', 'loudnorm=print_format=json', '-f', 'null', '-'], stdin=subprocess.DEVNULL, capture_output=True, timeout=300)
+    text = done.stderr.decode('utf8', 'replace').replace('\r', '')
+    block = json.loads(text[text.rindex('{'):text.rindex('}') + 1])
+    return float(block['input_i']), float(block['input_tp'])
+
+
+def write_audio_corpus(folder):
+    folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
+    c = {}
+    c['stereo'] = folder / 'estereo-440-880.wav'          # L = 440 Hz, R = 880 Hz, 4 s
+    ff('-f', 'lavfi', '-i', 'sine=f=440:d=4:r=44100', '-f', 'lavfi', '-i', 'sine=f=880:d=4:r=44100', '-filter_complex', '[0][1]amerge=inputs=2,volume=9dB', '-c:a', 'pcm_s16le', str(c['stereo']))
+    c['flac'] = folder / 'estereo.flac'; ff('-i', str(c['stereo']), str(c['flac']))
+    c['two'] = folder / 'duas-notas.wav'                   # mono: 2 s de 440 Hz e 2 s de 880 Hz
+    ff('-f', 'lavfi', '-i', 'sine=f=440:d=2:r=44100', '-f', 'lavfi', '-i', 'sine=f=880:d=2:r=44100', '-filter_complex', '[0][1]concat=n=2:v=0:a=1,volume=9dB', '-c:a', 'pcm_s16le', str(c['two']))
+    c['mono'] = folder / 'mono-8k.wav'; ff('-f', 'lavfi', '-i', 'sine=f=440:d=2:r=8000', '-af', 'volume=9dB', '-c:a', 'pcm_s16le', str(c['mono']))
+    for rate in (11025, 48000, 96000):                    # taxas de amostragem incomuns
+        c[f'rate{rate}'] = folder / f'taxa-{rate}.wav'; ff('-f', 'lavfi', '-i', f'sine=f=440:d=3:r={rate}', '-af', 'volume=9dB', '-c:a', 'pcm_s16le', str(c[f'rate{rate}']))
+    c['vbr'] = folder / 'vbr.mp3'; ff('-i', str(c['two']), '-c:a', 'libmp3lame', '-q:a', '2', str(c['vbr']))
+    c['silence'] = folder / 'silencio.wav'; ff('-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', '3', str(c['silence']))
+    c['padded'] = folder / 'com-silencio-nas-pontas.wav'   # 1 s de silêncio + 2 s de 440 Hz + 1 s de silêncio
+    ff('-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono:d=1', '-f', 'lavfi', '-i', 'sine=f=440:d=2:r=44100', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono:d=1', '-filter_complex', '[0][1][2]concat=n=3:v=0:a=1,volume=9dB', '-c:a', 'pcm_s16le', str(c['padded']))
+    c['surround'] = folder / 'surround-5-1.flac'; ff('-f', 'lavfi', '-i', 'sine=f=440:d=2:r=44100', '-af', 'aformat=channel_layouts=5.1', str(c['surround']))
+    c['quiet'] = folder / 'ruido-baixo.wav'; ff('-f', 'lavfi', '-i', 'anoisesrc=d=12:c=pink:r=44100:a=0.1:seed=7', '-ac', '2', '-c:a', 'pcm_s16le', str(c['quiet']))
+    c['noise'] = folder / 'ruido-20s.wav'; ff('-f', 'lavfi', '-i', 'anoisesrc=d=20:c=pink:r=44100:a=0.3:seed=3', '-ac', '2', '-c:a', 'pcm_s16le', str(c['noise']))
+    c['peaky'] = folder / 'baixo-com-picos.wav'           # pouco volume médio, picos quase em 0 dBFS: normalizar sem limitador estouraria
+    ff('-f', 'lavfi', '-i', "aevalsrc='if(lt(mod(t,1),0.001),0.95,0.01*sin(2*PI*300*t))':d=6:s=44100", '-c:a', 'pcm_s16le', str(c['peaky']))
+    cover = folder / 'capa.png'; Image.new('RGB', (64, 64), (200, 80, 40)).save(cover)
+    c['tagged'] = folder / 'canção-com-etiquetas.mp3'
+    ff('-i', str(c['stereo']), '-i', str(cover), '-map', '0:a', '-map', '1:v', '-c:a', 'libmp3lame', '-b:a', '128k', '-c:v', 'copy', '-id3v2_version', '3', '-metadata', 'title=Canção de Teste', '-metadata', 'artist=Banda Ñandú',
+       '-metadata', 'album=Álbum', '-metadata', 'date=2024', '-metadata', 'genre=Teste', '-disposition:v', 'attached_pic', str(c['tagged']))
+    rng = np.random.default_rng(5)
+    c['garbage'] = folder / 'lixo.mp3'; c['garbage'].write_bytes(rng.integers(0, 256, 40000, dtype=np.uint8).tobytes())
+    c['empty'] = folder / 'vazio.wav'; c['empty'].write_bytes(b'')
+    c['text'] = folder / 'texto.wav'; c['text'].write_text('isto não é áudio\n' * 50, encoding='utf8')
+    c['truncated'] = folder / 'cortado.flac'; c['truncated'].write_bytes(c['flac'].read_bytes()[:c['flac'].stat().st_size // 2])
+    c['fake_ext'] = folder / 'wav-disfarçado.mp3'; c['fake_ext'].write_bytes(c['stereo'].read_bytes())
+    c['spaces'] = folder / 'pasta com espaços' / 'áudio ção #1 (cópia).wav'; c['spaces'].parent.mkdir(); c['spaces'].write_bytes(c['mono'].read_bytes())
+    return c
+
+
+def have_audio():
+    return bool(FFMPEG and FFPROBE)
+
+
+def audio_guard(func_name):
+    if have_audio():
+        return False
+    record(func_name, 'FFmpeg e ffprobe disponíveis', True, skipped=True, detail='FFmpeg não encontrado neste ambiente')
+    return True
+
+
+@guarded
+def audio_convert(c):
+    f = 'Áudio — converter'
+    if audio_guard(f): return
+    a = c['audio']; stereo = a['stereo']
+    ref = pcm(stereo, 44100, 2)
+    out = run_one('Convert Audio', stereo, audio_format='flac')
+    got = pcm(out, 44100, 2)
+    record(f, 'WAV → FLAC é exato (amostras idênticas)', got.shape == ref.shape and bool((got == ref).all()), f'{got.shape[1]} amostras')
+    back = run_one('Convert Audio', out, audio_format='wav')
+    record(f, 'FLAC → WAV devolve as mesmas amostras', bool((pcm(back, 44100, 2) == ref).all()))
+    for fmt, tol_hz, tol_db, tol_s in (('mp3', 0.02, 2.0, 0.15), ('m4a', 0.02, 2.0, 0.15), ('ogg', 0.02, 2.0, 0.15), ('opus', 0.02, 2.5, 0.15)):
+        try:
+            out = run_one('Convert Audio', stereo, audio_format=fmt, audio_quality='high')
+        except Exception as error:
+            record(f, f'WAV → {fmt.upper()}', False, type(error).__name__, str(error)[:160]); continue
+        info = mediatools.probe(out); left, right = pcm(out, 44100, 2)
+        ok = abs(peak_hz(left, 44100) - 440) <= 440 * tol_hz and abs(peak_hz(right, 44100) - 880) <= 880 * tol_hz
+        record(f, f'{fmt.upper()}: cada canal mantém a sua nota (440 / 880 Hz)', ok, f'{peak_hz(left, 44100):.0f} / {peak_hz(right, 44100):.0f} Hz')
+        delta = abs(level_db(left) - level_db(ref[0]))
+        record(f, f'{fmt.upper()}: nível preservado (±{tol_db} dB)', delta <= tol_db, f'{delta:.2f} dB')
+        record(f, f'{fmt.upper()}: duração e canais corretos', abs(info['duration'] - 4.0) <= tol_s and info['channels'] == 2, f"{info['duration']:.2f} s, {info['channels']} canais")
+        record(f, f'{fmt.upper()}: decodifica sem erro', decodes_cleanly(out))
+    for rate in (11025, 48000, 96000):
+        flac = run_one('Convert Audio', a[f'rate{rate}'], audio_format='flac'); info = mediatools.probe(flac)
+        record(f, f'taxa {rate} Hz: FLAC mantém a taxa e as amostras', info['sample_rate'] == rate and bool((pcm(flac, rate, 1) == pcm(a[f'rate{rate}'], rate, 1)).all()), f"{info['sample_rate']} Hz")
+        mp3 = run_one('Convert Audio', a[f'rate{rate}'], audio_format='mp3'); x = pcm(mp3, 16000, 1)[0]
+        record(f, f'taxa {rate} Hz → MP3: nota e duração corretas', abs(peak_hz(x) - 440) < 12 and abs(duration_of(mp3) - 3.0) < 0.15, f'{peak_hz(x):.0f} Hz, {duration_of(mp3):.2f} s')
+    low = run_one('Convert Audio', a['noise'], audio_format='mp3', audio_quality='low'); high = run_one('Convert Audio', a['noise'], audio_format='mp3', audio_quality='high')
+    record(f, 'qualidade «alta» gera arquivo maior que «baixa»', high.stat().st_size > low.stat().st_size, f'{low.stat().st_size} < {high.stat().st_size}')
+    mono = run_one('Convert Audio', a['surround'], audio_format='mp3')
+    record(f, 'MP3 (máx. 2 canais) a partir de 5.1: sai estéreo', mediatools.probe(mono)['channels'] <= 2, str(mediatools.probe(mono)['channels']))
+    wav = run_one('Convert Audio', a['mono'], audio_format='flac')
+    record(f, 'taxa de amostragem e canais de origem mantidos (FLAC)', mediatools.probe(wav)['sample_rate'] == 8000 and mediatools.probe(wav)['channels'] == 1)
+
+
+@guarded
+def audio_tags(c):
+    f = 'Áudio — etiquetas e capa'
+    if audio_guard(f): return
+    a = c['audio']; tagged = a['tagged']; before = sha(tagged)
+    keep = run_one('Convert Audio', tagged, audio_format='mp3', audio_tags='keep'); info = mediatools.probe(keep)
+    record(f, 'conversão com «manter» preserva título e artista (acentos)', info['tags'].get('title') == 'Canção de Teste' and info['tags'].get('artist') == 'Banda Ñandú', str(info['tags'])[:80])
+    drop = run_one('Convert Audio', tagged, audio_format='m4a', audio_tags='drop'); info = mediatools.probe(drop)
+    record(f, 'conversão com «remover» não deixa etiqueta nem capa', not info['tags'] and not info['has_cover'], str(info['tags'])[:80])
+    edit = run_one('Audio Tags', tagged, tag_title='Título Novo', tag_album='')
+    info = mediatools.probe(edit)
+    record(f, 'editar: título muda, álbum vazio é removido, artista segue', info['tags'].get('title') == 'Título Novo' and 'album' not in info['tags'] and info['tags'].get('artist') == 'Banda Ñandú', str(info['tags'])[:100])
+    record(f, 'editar etiquetas não recodifica (áudio idêntico amostra a amostra)', bool((pcm(edit, 44100, 2) == pcm(tagged, 44100, 2)).all()))
+    record(f, 'editar etiquetas mantém a capa', info['has_cover'])
+    clear = run_one('Audio Tags', tagged, tag_mode='clear'); info = mediatools.probe(clear)
+    record(f, '«limpar tudo» remove etiquetas e capa', not info['tags'] and not info['has_cover'], str(info['tags'])[:80])
+    nocover = run_one('Audio Tags', tagged, tag_cover='drop')
+    record(f, 'remover só a capa mantém as etiquetas', not mediatools.probe(nocover)['has_cover'] and mediatools.probe(nocover)['tags'].get('title') == 'Canção de Teste')
+    record(f, 'o original nunca é alterado', sha(tagged) == before)
+    for bad in ({'tag_track': 'três'}, {'tag_title': 'x' * 300}, {'tag_date': '01/02/2020'}):
+        try: run_one('Audio Tags', tagged, **bad); ok = False
+        except Exception: ok = True
+        record(f, f'valor inválido recusado ({next(iter(bad))})', ok)
+
+
+@guarded
+def audio_channels(c):
+    f = 'Áudio — canais'
+    if audio_guard(f): return
+    a = c['audio']
+    for mode, hz in (('left', 440), ('right', 880)):
+        out = run_one('Audio Channels', a['stereo'], chan_mode=mode); info = mediatools.probe(out); x = pcm(out, 44100, 1)[0]
+        record(f, f'«{mode}»: sai mono com a nota do canal escolhido', info['channels'] == 1 and abs(peak_hz(x, 44100) - hz) <= hz * 0.02, f"{info['channels']} canal, {peak_hz(x, 44100):.0f} Hz")
+    out = run_one('Audio Channels', a['stereo'], chan_mode='mono'); x = pcm(out, 44100, 1)[0]
+    record(f, 'mixar para mono mantém as duas notas', band_ratio(x, 440, 44100) > 0.2 and band_ratio(x, 880, 44100) > 0.2 and mediatools.probe(out)['channels'] == 1, f'{band_ratio(x, 440, 44100):.2f} / {band_ratio(x, 880, 44100):.2f}')
+    out = run_one('Audio Channels', a['mono'], chan_mode='stereo'); l, r = pcm(out, 8000, 2)
+    record(f, 'mono → estéreo: os dois lados iguais', mediatools.probe(out)['channels'] == 2 and float(np.abs(l - r).max()) < 1e-3)
+    try: run_one('Audio Channels', a['surround'], chan_mode='left'); ok = True
+    except Exception: ok = True
+    record(f, 'entrada 5.1 não derruba o app', ok)
+
+
+@guarded
+def audio_trim(c):
+    f = 'Áudio — cortar'
+    if audio_guard(f): return
+    a = c['audio']
+    out = run_one('Audio Trim', a['two'], trim_start_ms=0, trim_end_ms=1500)
+    x = pcm(out, 44100)[0]
+    record(f, 'cortar 0–1,5 s (WAV): duração exata e só a primeira nota', abs(duration_of(out) - 1.5) <= 0.03 and abs(peak_hz(x, 44100) - 440) < 10, f'{duration_of(out):.3f} s, {peak_hz(x, 44100):.0f} Hz')
+    out = run_one('Audio Trim', a['two'], trim_start_ms=2500, trim_end_ms=3500); x = pcm(out, 44100)[0]
+    record(f, 'cortar 2,5–3,5 s: só a segunda nota', abs(duration_of(out) - 1.0) <= 0.03 and abs(peak_hz(x, 44100) - 880) < 15, f'{duration_of(out):.3f} s, {peak_hz(x, 44100):.0f} Hz')
+    out = run_one('Audio Trim', a['two'], trim_start_ms=1000)
+    record(f, 'sem fim: vai até o final do arquivo', abs(duration_of(out) - 3.0) <= 0.05, f'{duration_of(out):.3f} s')
+    out = run_one('Audio Trim', a['padded'], trim_mode='silence')
+    record(f, 'silêncio das pontas removido (4 s → ≈ 2 s)', 1.9 <= duration_of(out) <= 2.35, f'{duration_of(out):.3f} s')
+    mp3 = run_one('Convert Audio', a['stereo'], audio_format='mp3'); before = duration_of(mp3)
+    out = run_one('Audio Trim', mp3, trim_start_ms=1000, trim_end_ms=3000)
+    record(f, 'MP3 cortado: duração próxima do pedido e decodifica', abs(duration_of(out) - 2.0) <= 0.15 and decodes_cleanly(out), f'{duration_of(out):.3f} s (de {before:.2f})')
+    out = run_one('Audio Trim', a['vbr'], trim_start_ms=1000, trim_end_ms=3000)
+    record(f, 'MP3 VBR cortado: duração próxima do pedido, decodifica e mantém a nota', abs(duration_of(out) - 2.0) <= 0.15 and decodes_cleanly(out) and abs(peak_hz(pcm(out, 16000, 1)[0]) - 880) < 15, f'{duration_of(out):.3f} s')
+    for bad in ({'trim_start_ms': 3500, 'trim_end_ms': 1000}, {'trim_start_ms': 99999999}, {'trim_start_ms': 0, 'trim_end_ms': 99999999}):
+        try: run_one('Audio Trim', a['two'], **bad); ok = False
+        except Exception: ok = True
+        record(f, f'intervalo inválido recusado {bad}', ok)
+
+
+@guarded
+def audio_normalize(c):
+    f = 'Áudio — normalizar'
+    if audio_guard(f): return
+    a = c['audio']; before, _ = loudness(a['quiet'])
+    for target, goal in (('podcast', -16.0), ('ebu', -23.0)):
+        out = run_one('Audio Normalize', a['quiet'], norm_target=target); lufs, peak = loudness(out)
+        record(f, f'alvo {target} ({goal:g} LUFS) atingido (±1 LU)', abs(lufs - goal) <= 1.0, f'{before:.1f} → {lufs:.1f} LUFS')
+        record(f, f'alvo {target}: pico verdadeiro ≤ −1 dBTP', peak <= -1.0, f'{peak:.1f} dBTP')
+    out = run_one('Audio Normalize', a['quiet'], norm_target='podcast'); ref = pcm(a['quiet'], 44100, 2); got = pcm(out, 44100, 2)
+    corr = float(np.corrcoef(ref[0][:200000], got[0][:200000])[0, 1])
+    record(f, 'só muda o ganho (forma de onda correlaciona > 0,999)', corr > 0.999, f'{corr:.5f}')
+    try: run_one('Audio Normalize', a['peaky'], norm_target='podcast'); ok = False
+    except Exception as error: ok = 'pico' in str(error).lower() or 'clip' in str(error).lower() or 'estour' in str(error).lower() or 'limit' in str(error).lower()
+    record(f, 'recusa quando o ganho estouraria o pico (sem limitador)', ok)
+    out = run_one('Audio Normalize', a['stereo'], norm_target='music')
+    record(f, 'canais e duração preservados', mediatools.probe(out)['channels'] == 2 and abs(duration_of(out) - 4.0) < 0.1)
+
+
+@guarded
+def audio_compress(c):
+    f = 'Áudio — comprimir'
+    if audio_guard(f): return
+    a = c['audio']; original = a['noise'].stat().st_size
+    for kbps in (64, 128):
+        out = run_one('Compress Audio', a['noise'], comp_mode='bitrate', comp_kbps=kbps, audio_format='mp3'); expected = kbps * 1000 / 8 * 20
+        ratio = out.stat().st_size / expected
+        record(f, f'MP3 a {kbps} kbps: tamanho ≈ bitrate × duração (±15 %)', 0.85 <= ratio <= 1.15, f'{ratio:.2f}× do esperado')
+        record(f, f'MP3 a {kbps} kbps: bem menor que o WAV', out.stat().st_size < original * 0.25, f'{out.stat().st_size} de {original} bytes')
+    target = 300
+    out = run_one('Compress Audio', a['noise'], comp_mode='size', comp_size_kb=target, audio_format='m4a')
+    record(f, f'tamanho-alvo {target} kB (melhor esforço, ≤ 1,25×)', out.stat().st_size <= target * 1024 * 1.25, f'{out.stat().st_size / 1024:.0f} kB', blocking=False)
+    record(f, 'duração e decodificação preservadas', abs(duration_of(out) - 20.0) < 0.3 and decodes_cleanly(out), f'{duration_of(out):.2f} s')
+    mono = run_one('Compress Audio', a['noise'], comp_mode='bitrate', comp_kbps=64, audio_format='opus', comp_mono='yes')
+    record(f, '«mono» entrega 1 canal', mediatools.probe(mono)['channels'] == 1)
+    for bad in ({'comp_kbps': 5000}, {'comp_mode': 'size', 'comp_size_kb': 1}, {'comp_kbps': 64, 'audio_format': 'flac'}):
+        try: run_one('Compress Audio', a['noise'], **bad); ok = False
+        except Exception: ok = True
+        record(f, f'pedido impossível recusado {bad}', ok)
+
+
+@guarded
+def audio_bleep(c):
+    f = 'Áudio — bleep'
+    if audio_guard(f): return
+    a = c['audio']
+    out = run_one('Audio Bleep', a['two'], bleep_ranges=['0:00,5-0:01,5'], bleep_mode='tone', bleep_tone='mid')
+    inside = pcm(out, 16000, 1, 0.6, 0.8)[0]; outside = pcm(out, 16000, 1, 2.5, 1.0)[0]; ref = pcm(a['two'], 16000, 1, 2.5, 1.0)[0]
+    record(f, 'trecho coberto vira tom de 1 kHz (≥ 90 % da energia)', band_ratio(inside, 1000) >= 0.9, f'{band_ratio(inside, 1000):.2f}')
+    record(f, 'fora do trecho o som é o original (nota e nível)', abs(peak_hz(outside) - 880) < 20 and abs(level_db(outside) - level_db(ref)) < 0.5, f'{peak_hz(outside):.0f} Hz, Δ{abs(level_db(outside) - level_db(ref)):.2f} dB')
+    record(f, 'duração e canais preservados', abs(duration_of(out) - 4.0) < 0.05 and mediatools.probe(out)['channels'] == 1)
+    out = run_one('Audio Bleep', a['stereo'], bleep_ranges=['1-2', '3-3,5'], bleep_mode='mute')
+    muted = pcm(out, 16000, 1, 1.1, 0.8)[0]; kept = pcm(out, 16000, 1, 2.2, 0.6)[0]
+    record(f, 'modo mudo: trechos em silêncio (< −50 dB) e o resto intacto', level_db(muted) < -50 and level_db(kept) > -25, f'{level_db(muted):.0f} dB / {level_db(kept):.0f} dB')
+    out = run_one('Audio Bleep', a['stereo'], bleep_ranges=['0-1'], bleep_mode='tone', bleep_tone='high')
+    l, r = pcm(out, 44100, 2, 0.2, 0.6)
+    record(f, 'estéreo: o tom entra nos dois canais', band_ratio(l, 2000, 44100) > 0.9 and band_ratio(r, 2000, 44100) > 0.9)
+    out = run_one('Audio Bleep', a['two'], bleep_ranges=['1-2', '1,5-2,5'], bleep_mode='mute')
+    record(f, 'intervalos sobrepostos são unidos (um só trecho mudo)', level_db(pcm(out, 16000, 1, 1.1, 1.3)[0]) < -50)
+    for bad in (['0-4'], ['3-1'], ['5-6'], ['abc'], ['-1-2']):
+        try: run_one('Audio Bleep', a['two'], bleep_ranges=bad); ok = False
+        except Exception: ok = True
+        record(f, f'intervalo inválido recusado {bad}', ok)
+    out = run_one('Audio Bleep', a['tagged'], bleep_ranges=['1-2'], audio_tags='drop')
+    record(f, 'MP3 com etiquetas: «remover» não deixa etiqueta', not mediatools.probe(out)['tags'] and decodes_cleanly(out))
+
+
+@guarded
+def audio_visualizer(c, full=True):
+    f = 'Áudio — visualizador MP4'
+    if audio_guard(f): return
+    a = c['audio']
+    for style in ('waves', 'spectrum'):
+        out = run_one('Audio Visualizer', a['two'], viz_style=style, viz_size='360p'); info = mediatools.probe(out)
+        record(f, f'{style}: MP4 de 640×360 em MPEG-4 + AAC', (info['video_codec'], info['video_width'], info['video_height'], info['codec']) == ('mpeg4', 640, 360, 'aac'), f"{info['video_codec']} {info['video_width']}×{info['video_height']}")
+        record(f, f'{style}: duração igual à do áudio (±0,3 s) e decodifica sem erro', abs(info['duration'] - 4.0) <= 0.3 and decodes_cleanly(out), f"{info['duration']:.2f} s")
+        frame = WORK / f'frame-{style}.pgm'; ff('-ss', '2', '-i', str(out), '-frames:v', '1', '-vf', 'format=gray', str(frame))
+        record(f, f'{style}: o quadro tem desenho (não é preto)', sum(1 for b in frame.read_bytes()[20:] if b > 40) > 300)
+        sound = pcm(out, 16000, 1, 0.2, 1.5)[0]
+        record(f, f'{style}: o áudio do MP4 mantém a nota (440 Hz)', abs(peak_hz(sound) - 440) < 15, f'{peak_hz(sound):.0f} Hz')
+    out = run_one('Audio Visualizer', a['silence'], viz_style='spectrum', viz_size='360p')
+    record(f, 'áudio em silêncio gera vídeo válido', decodes_cleanly(out))
+    out = run_one('Audio Visualizer', a['surround'], viz_size='360p')
+    record(f, 'áudio 5.1 gera MP4 com som estéreo', mediatools.probe(out)['channels'] == 2)
+    if full:
+        long = WORK / 'longo-31min.wav'; ff('-f', 'lavfi', '-i', 'anullsrc=r=8000:cl=mono', '-t', '1860', '-c:a', 'pcm_u8', str(long))
+        try: run_one('Audio Visualizer', long); ok = False
+        except Exception as error: ok = '30 minutos' in str(error)
+        record(f, 'áudio acima de 30 minutos é recusado com explicação', ok)
+        long.unlink(missing_ok=True)
+
+
+AUDIO_TOOLS = (('Convert Audio', {'audio_format': 'mp3'}), ('Audio Tags', {'tag_title': 'X'}), ('Audio Channels', {'chan_mode': 'mono'}), ('Audio Trim', {'trim_start_ms': 100}),
+               ('Audio Normalize', {'norm_target': 'podcast'}), ('Compress Audio', {'comp_kbps': 64, 'audio_format': 'mp3'}), ('Audio Bleep', {'bleep_ranges': ['0-1']}), ('Audio Visualizer', {'viz_size': '360p'}))
+
+
+@guarded
+def audio_robustness(c):
+    f = 'Áudio — robustez'
+    if audio_guard(f): return
+    a = c['audio']; bad_cases = ('garbage', 'empty', 'text', 'truncated')
+    problems = []; untranslated = []
+    for key in bad_cases:
+        source = a[key]; before = sha(source)
+        for target, options in AUDIO_TOOLS:
+            out = sandbox('bad')
+            try:
+                with NoNetwork():
+                    result = engine.convert({'paths': [str(source)], 'target': target, 'output': str(out), **options})
+                copy_only = target == 'Audio Tags'          # etiquetas não recodificam: copiam o áudio como está (um arquivo cortado continua cortado)
+                if key != 'truncated' or (not copy_only and not all(decodes_cleanly(p) for p in result)):
+                    problems.append(f'{key}/{target}: aceitou entrada inválida' if key != 'truncated' else f'{key}/{target}: saída não decodifica')
+            except Exception as error:
+                message = str(error)
+                if not message.strip() or 'Traceback' in message or 'File "' in message:
+                    untranslated.append(f'{key}/{target}')
+            if leftovers(out) or any(p.suffix == '.part' for p in Path(out).rglob('*')):
+                problems.append(f'{key}/{target}: sobrou arquivo parcial')
+            if key != 'truncated' and any(Path(out).iterdir()):
+                problems.append(f'{key}/{target}: gerou arquivo a partir de entrada inválida')
+        if sha(source) != before:
+            problems.append(f'{key}: original alterado')
+    record(f, 'arquivo corrompido/vazio/texto: recusado sem deixar saída parcial nem alterar o original', not problems, f'{len(bad_cases) * len(AUDIO_TOOLS)} combinações', '; '.join(problems[:4]))
+    record(f, 'toda recusa traz mensagem legível (sem traceback)', not untranslated, '', '; '.join(untranslated[:4]))
+    out = run_one('Convert Audio', a['fake_ext'], audio_format='flac')
+    record(f, 'WAV com extensão .mp3: o formato vem do conteúdo, não do nome', mediatools.probe(out)['codec'] == 'flac' and abs(duration_of(out) - 4.0) < 0.1)
+    out = run_one('Convert Audio', a['spaces'], audio_format='flac')
+    record(f, 'nome com espaços, acentos, «#» e parênteses', out.is_file() and decodes_cleanly(out), out.name)
+    folder = sandbox('multi'); results = [engine.convert({'paths': [str(p)], 'target': 'Convert Audio', 'output': str(folder), 'audio_format': 'mp3'})[0] for p in (a['mono'], a['stereo'])]
+    record(f, 'dois arquivos na mesma pasta de saída geram duas saídas distintas', len({Path(p).name for p in results}) == 2 and all(Path(p).is_file() for p in results))
+    with NoNetwork() as net:
+        for target, options in AUDIO_TOOLS:
+            run_one(target, a['stereo'], **options)
+    record(f, 'nenhuma tentativa de rede nas 8 ferramentas', net.attempts == 0, str(net.attempts))
+
+
+@guarded
+def audio_determinism(c):
+    f = 'Áudio — determinismo e originais'
+    if audio_guard(f): return
+    a = c['audio']; hashes = {k: sha(v) for k, v in a.items() if isinstance(v, Path) and v.is_file()}
+    different = []
+    for target, options in AUDIO_TOOLS:
+        first = run_one(target, a['stereo'], **options); second = run_one(target, a['stereo'], **options)
+        if first.read_bytes() != second.read_bytes():
+            different.append(target)
+    record(f, 'mesma entrada e opções → mesmos bytes de saída (8 ferramentas)', not different, '', ', '.join(different), blocking=False)
+    record(f, 'originais intactos depois de todas as ferramentas', all(sha(a[k]) == h for k, h in hashes.items()), f'{len(hashes)} arquivos')
+    folder = sandbox('names'); source = a['mono']
+    one = engine.convert({'paths': [str(source)], 'target': 'Convert Audio', 'output': str(folder), 'audio_format': 'flac'})[0]
+    two = engine.convert({'paths': [str(source)], 'target': 'Convert Audio', 'output': str(folder), 'audio_format': 'flac'})[0]
+    record(f, 'saída repetida ganha nome novo (-2) e nunca sobrescreve', Path(one) != Path(two) and Path(one).is_file() and Path(two).is_file() and Path(two).stem.endswith('-2'), f'{Path(one).name} / {Path(two).name}')
+
+
+@guarded
+def audio_performance(c):
+    f = 'Áudio — desempenho'
+    if audio_guard(f): return
+    long = WORK / 'longo-10min.wav'; ff('-f', 'lavfi', '-i', 'anoisesrc=d=600:c=pink:r=22050:a=0.2:seed=1', '-ac', '1', '-c:a', 'pcm_s16le', str(long))
+    limits = (('Convert Audio', {'audio_format': 'mp3'}, 60), ('Audio Normalize', {'norm_target': 'ebu'}, 90), ('Audio Trim', {'trim_start_ms': 1000, 'trim_end_ms': 300000}, 30),
+              ('Audio Channels', {'chan_mode': 'stereo'}, 40), ('Audio Bleep', {'bleep_ranges': ['10-12']}, 60), ('Compress Audio', {'comp_kbps': 64, 'audio_format': 'mp3'}, 60))
+    table = []; slow = []
+    for target, options, limit in limits:
+        start = time.perf_counter(); run_one(target, long, **options); seconds = time.perf_counter() - start
+        table.append((target, seconds))
+        if seconds > limit: slow.append(f'{target} {seconds:.0f}s>{limit}s')
+    record(f, 'áudio de 10 min dentro do limite de tempo de cada ferramenta', not slow, 'pior: ' + max(table, key=lambda x: x[1])[0], ', '.join(f'{k} {v:.1f}s' for k, v in table) + (' · lentas: ' + ', '.join(slow) if slow else ''), blocking=False)
+    huge = WORK / 'quatro-horas.wav'; ff('-f', 'lavfi', '-i', 'sine=f=440:r=8000', '-t', '14400', '-ac', '1', '-c:a', 'pcm_u8', str(huge), timeout=300)
+    import runner
+    start = time.perf_counter()
+    try:
+        outputs = runner.run_job({'paths': [str(huge)], 'target': 'Convert Audio', 'audio_format': 'mp3', 'output': str(sandbox('huge'))}, timeout=900); ok, detail = bool(outputs), ''
+    except Exception as error:      # noqa: BLE001
+        ok, detail = False, str(error)[:200]
+    seconds = time.perf_counter() - start
+    record(f, 'arquivo de 4 h convertido pelo worker (limites reais de memória e tempo)', ok, f'{seconds:.0f} s', detail, blocking=False)
+    huge.unlink(missing_ok=True)
+    start = time.perf_counter(); out = run_one('Audio Visualizer', c['audio']['noise'], viz_size='360p'); seconds = time.perf_counter() - start
+    record(f, 'visualizador: 20 s de áudio em ≤ 60 s', seconds <= 60, f'{seconds:.1f} s', blocking=False)
+    long.unlink(missing_ok=True)
+
+
+AUDIO_SECTIONS = (audio_convert, audio_tags, audio_channels, audio_trim, audio_normalize, audio_compress, audio_bleep, audio_visualizer, audio_robustness, audio_determinism)
+
 IMAGE_SECTIONS = (conversion_fidelity, orientation_and_privacy, geometry_tools, look_tools, draw_and_protect_tools, compress_tool, multi_image_tools,
             robustness, determinism_and_originals, vector_input, background_removal, ocr_quality)
 PDF_SECTIONS = (pdf_invariants, pdf_fidelity, pdf_redaction, pdf_robustness, pdf_geometry, pdf_security, pdf_ocr_quality, pdf_libreoffice)
-SECTIONS = IMAGE_SECTIONS + PDF_SECTIONS
+SECTIONS = IMAGE_SECTIONS + PDF_SECTIONS + AUDIO_SECTIONS
 
 
 def score(passed, failed):
@@ -992,7 +1389,7 @@ def write_report(out_dir, seconds):
     passed = sum(1 for r in RESULTS if r['status'] == 'PASSOU'); failed = [r for r in RESULTS if r['status'] == 'FALHOU']; skipped = sum(1 for r in RESULTS if r['status'] == 'PULADA')
     blocking_failures = [r for r in failed if r['blocking']]
     low = [name for name, items in groups.items() if score(sum(1 for r in items if r['status'] == 'PASSOU'), sum(1 for r in items if r['status'] == 'FALHOU' and r['blocking'])) < 80]
-    lines = ['# Relatório de qualidade — categorias Imagens e PDF', '',
+    lines = ['# Relatório de qualidade — categorias Imagens, PDF e Áudio', '',
              f'- Versão do motor: `{engine.VERSION}` · Python {platform.python_version()} · {platform.system()} {platform.release()}',
              f'- Duração: {seconds:.0f} s · verificações: {len(RESULTS)} · **passaram {passed}** · falharam {len(failed)} (bloqueantes: {len(blocking_failures)}) · puladas {skipped}',
              f'- Resultado geral: **{"APROVADO" if not blocking_failures and not low else "REPROVADO"}**' + (f' · funções abaixo de 80: {", ".join(low)}' if low else ' · nenhuma função abaixo de 80'), '',
@@ -1015,7 +1412,7 @@ def main(argv=None):
         try: stream.reconfigure(encoding='utf-8', errors='replace')
         except (AttributeError, ValueError): pass
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('--out', default='quality-report'); parser.add_argument('--corpus'); parser.add_argument('--fast', action='store_true'); parser.add_argument('--only', choices=('all', 'images', 'pdf'), default='all')
+    parser.add_argument('--out', default='quality-report'); parser.add_argument('--corpus'); parser.add_argument('--fast', action='store_true'); parser.add_argument('--only', choices=('all', 'images', 'pdf', 'audio'), default='all')
     args = parser.parse_args(argv)
     if args.corpus:
         files = write_corpus(args.corpus); write_pdf_corpus(Path(args.corpus) / 'pdf')
@@ -1029,6 +1426,9 @@ def main(argv=None):
     if args.only in ('all', 'pdf'):
         corpus['pdf'] = write_pdf_corpus(WORK / 'corpus-pdf')
         sections += list(PDF_SECTIONS) + ([] if args.fast else [pdf_performance])
+    if args.only in ('all', 'audio'):
+        corpus['audio'] = write_audio_corpus(WORK / 'corpus-audio') if have_audio() else {}
+        sections += list(AUDIO_SECTIONS) + ([] if args.fast else [audio_performance])
     for section in sections:
         section(corpus)
         print(f'  {section.__name__}: {sum(1 for r in RESULTS if r["func"] == section.__name__ or True)} verificações até aqui', flush=True)

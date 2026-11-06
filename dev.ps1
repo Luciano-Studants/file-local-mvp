@@ -13,7 +13,7 @@ switch ($Task) {
     'doctor'  { Need-Venv; & $py tools\doctor.py }
     'run'     { Need-Venv; & $py app.py }
     'test'    { Need-Venv; $env:QT_QPA_PLATFORM = 'offscreen'; & $py -I -W ignore -m unittest discover -s tests -q }
-    'quality' { Need-Venv; $env:QT_QPA_PLATFORM = 'offscreen'; & $py tools\quality_suite.py --only pdf --fast --out quality-report; Write-Host 'Relatório: quality-report\quality-report.md' }
+    'quality' { Need-Venv; $env:QT_QPA_PLATFORM = 'offscreen'; & $py tools\quality_suite.py --only pdf --fast --out quality-report; & $py tools\quality_suite.py --only audio --fast --out quality-report-audio; Write-Host 'Relatórios: quality-report\quality-report.md e quality-report-audio\quality-report.md' }
     'smoke'   { Need-Venv; & $py app.py --smoke-test; Write-Host "código de saída: $LASTEXITCODE" }
     'build'   { & powershell -ExecutionPolicy Bypass -File instalador\build_windows.ps1 }
     default   { Write-Host 'uso: .\dev.ps1 setup | doctor | run | test | quality | smoke | build' }
