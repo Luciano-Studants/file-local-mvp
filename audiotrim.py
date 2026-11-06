@@ -118,7 +118,7 @@ def plan_cut(mode: str, start_ms: int, end_ms: int, duration: float, edges: tupl
     if mode == 'silence':
         lead, tail = edges or (0.0, 0.0)
         if lead < SILENCE_MIN and tail < SILENCE_MIN:
-            raise MediaError(f'Não há silêncio de pelo menos {SILENCE_MIN:g} s (abaixo de {SILENCE_DB} dB) no começo nem no fim.'.replace('.', ','))
+            raise MediaError(f'Não há silêncio de pelo menos {SILENCE_MIN:g} s (abaixo de {SILENCE_DB} dB) no começo nem no fim.'.replace('0.3', '0,3'))
         start = max(0.0, lead - SILENCE_PAD) if lead >= SILENCE_MIN else 0.0
         end = duration - max(0.0, tail - SILENCE_PAD) if tail >= SILENCE_MIN else duration
     else:
@@ -174,7 +174,7 @@ def notes(info: dict | None, mode: str, exact: bool) -> list:
         except MediaError as error:
             out.append(str(error))
     if mode == 'silence':
-        out.append(f'Só o silêncio do começo e do fim é removido (abaixo de {SILENCE_DB} dB por pelo menos {SILENCE_MIN:g} s, com folga de {int(SILENCE_PAD * 1000)} ms); silêncio no meio nunca é tocado.'.replace('.', ','))
+        out.append(f'Só o silêncio do começo e do fim é removido (abaixo de {SILENCE_DB} dB por pelo menos {SILENCE_MIN:g} s, com folga de {int(SILENCE_PAD * 1000)} ms); silêncio no meio nunca é tocado.'.replace('0.3', '0,3'))
     else:
         out.append('Fica só o trecho entre o início e o fim escolhidos.')
     if kind in LOSSLESS:
