@@ -63,13 +63,15 @@ def build_args(source: str, target: str, options: dict, info: dict) -> list:
     # o arquivo é aberto duas vezes (som e desenho): com `asplit` o FFmpeg pode travar esperando um dos ramos
     graph = f'[1:a:0]{video_filter(options)}[vo]'
     gate = ['-protocol_whitelist', 'file', '-format_whitelist', ','.join(audioconvert.INPUT_FORMATS)]
-    args = ['-nostdin', '-v', 'error', *gate, '-i', 'file:' + source, *gate, '-i', 'file:' + source,
+    # uma thread só: o worker limita a memória virtual (1,5 GiB) e o FFmpeg multithread estoura esse limite em máquinas com muitos núcleos
+    one = ['-threads', '1']
+    args = ['-nostdin', '-v', 'error', '-filter_threads', '1', '-filter_complex_threads', '1', *gate, *one, '-i', 'file:' + source, *gate, *one, '-i', 'file:' + source,
             '-filter_complex', graph, '-map', '[vo]', '-map', '0:a:0', '-sn', '-dn', '-map_chapters', '-1']
     if options['tags'] == 'keep':
         args += ['-map_metadata', '0']
     else:
         args += ['-map_metadata', '-1']
-    args += ['-c:v', VIDEO_ENCODER, '-b:v', f'{kbps}k', '-g', str(FPS * 2), '-c:a', 'aac', '-b:a', f'{AUDIO_KBPS}k']
+    args += [*one, '-c:v', VIDEO_ENCODER, '-b:v', f'{kbps}k', '-g', str(FPS * 2), '-c:a', 'aac', '-b:a', f'{AUDIO_KBPS}k']
     if int(info.get('channels') or 2) > 2:
         args += ['-ac', '2']
     args += ['-fflags', '+bitexact', '-movflags', '+faststart', '-fs', str(audioconvert.MAX_OUTPUT_BYTES - 1024 * 1024), '-f', 'mp4', '-n', 'file:' + target]

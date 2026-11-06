@@ -85,6 +85,24 @@ class ArgsTests(unittest.TestCase):
         spectrum = self.args(viz_style='spectrum', viz_size='360p')[self.args(viz_style='spectrum', viz_size='360p').index('-filter_complex') + 1]
         self.assertIn('showspectrum=s=640x360', spectrum); self.assertIn(',fps=25,', spectrum); self.assertNotIn('asplit', spectrum)
 
+    def test_single_thread_keeps_memory_low(self):
+        args = self.args()
+        self.assertEqual(args.count('-threads'), 3); self.assertEqual(args[args.index('-filter_threads') + 1], '1')
+        self.assertEqual(args[args.index('-filter_complex_threads') + 1], '1')
+
+    def test_runs_under_the_worker_memory_limit(self):
+        # o worker do app limita a memória virtual a 1,5 GiB; o FFmpeg com várias threads já estourou isso na CI (FFmpeg 8)
+        if not sys.platform.startswith('linux') or not FFMPEG or not HAS_VIDEO_ENCODER:
+            self.skipTest('só no Linux, com FFmpeg')
+        import resource
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'a.flac'; out = Path(tmp) / 'o.mp4'
+            run('-f', 'lavfi', '-i', 'sine=f=440:d=2', str(src))
+            args = [FFMPEG, *audioviz.build_args(str(src), str(out), audioviz.options_from({}), info())]
+            limit = lambda: resource.setrlimit(resource.RLIMIT_AS, (1024 ** 3, 1024 ** 3))
+            done = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True, timeout=90, preexec_fn=limit)
+            self.assertEqual(done.returncode, 0, done.stderr.decode()[-300:])
+
     def test_bitrate_follows_size(self):
         self.assertEqual(self.args()[self.args().index('-b:v') + 1], '1500k')
         self.assertEqual(self.args(viz_size='360p')[self.args(viz_size='360p').index('-b:v') + 1], '600k')
