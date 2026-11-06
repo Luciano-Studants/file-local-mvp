@@ -131,6 +131,16 @@ def parse_encoders(text: str) -> set:
     return names
 
 
+def parse_video_encoders(text: str) -> set:
+    """Nomes dos codificadores de vídeo da saída de `ffmpeg -encoders` (linhas «V..... nome descrição»)."""
+    names = set()
+    for line in text.splitlines():
+        match = re.match(r'^\s*V[\.A-Z]{5}\s+(\S+)\s', line)
+        if match and match.group(1) != '=':
+            names.add(match.group(1))
+    return names
+
+
 def build_info(refresh: bool = False) -> dict | None:
     """Versão, licença e codificadores de áudio do FFmpeg encontrado (None se não houver)."""
     if 'build' in _cache and not refresh:
@@ -139,8 +149,10 @@ def build_info(refresh: bool = False) -> dict | None:
     info = None
     if exe:
         info = parse_version(run_tool(exe, ['-version']))
-        encoders = parse_encoders(run_tool(exe, ['-encoders']))
+        listing = run_tool(exe, ['-encoders'])
+        encoders = parse_encoders(listing)
         info['encoders'] = sorted(encoders)
+        info['video_encoders'] = sorted(parse_video_encoders(listing))
         info['outputs'] = sorted(fmt for fmt, names in OUTPUT_ENCODERS.items() if any(name in encoders for name in names))
         info['exe'] = exe
     _cache['build'] = info
@@ -215,6 +227,8 @@ def parse_probe(data: dict) -> dict:
         'sample_rate': _number(first.get('sample_rate'), int, 0), 'channels': _number(first.get('channels'), int, 0),
         'channel_layout': _text(first.get('channel_layout', ''), 40), 'bits_per_sample': _number(first.get('bits_per_sample') or first.get('bits_per_raw_sample'), int, 0),
         'stream_bit_rate': _number(first.get('bit_rate'), int, 0),
+        'video_codec': _text(video[0].get('codec_name', ''), 40) if video else '', 'video_width': _number(video[0].get('width'), int, 0) if video else 0,
+        'video_height': _number(video[0].get('height'), int, 0) if video else 0,
         'tags': {key: _text(tags[key]) for key in TAG_KEYS if key in tags and _text(tags[key])},
         'extra_tags': dict(list(extra.items())[:MAX_EXTRA_TAGS]), 'extra_tag_count': len(extra),
     }

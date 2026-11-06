@@ -161,7 +161,7 @@ class PanelTests(unittest.TestCase):
         self.assertIs(self.panel.category_body.currentWidget(), self.panel.wheels_scroll)
         wheel = self.panel.wheel_widgets[0]
         self.assertEqual([a.label for a in wheel.actions], ['Ler', 'Converter', 'Editar', 'Ajustar'])
-        self.assertEqual([c.target for a in wheel.actions for c in a.children], [wp.AUDIO_INFO, wp.AUDIO_TAGS, wp.AUDIO_CONVERT, wp.AUDIO_COMPRESS, wp.AUDIO_TRIM, wp.AUDIO_BLEEP, wp.AUDIO_CHANNELS, wp.AUDIO_NORM])
+        self.assertEqual([c.target for a in wheel.actions for c in a.children], [wp.AUDIO_INFO, wp.AUDIO_TAGS, wp.AUDIO_CONVERT, wp.AUDIO_COMPRESS, wp.AUDIO_VIZ, wp.AUDIO_TRIM, wp.AUDIO_BLEEP, wp.AUDIO_CHANNELS, wp.AUDIO_NORM])
         self.assertTrue(wp.CATEGORIES['audio'][2])
 
     def test_choosing_the_wheel_slice_opens_the_read_only_tool(self):

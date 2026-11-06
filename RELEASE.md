@@ -1,4 +1,10 @@
-# Arquivo Local 0.9.49-phase2-dev — Áudio: bleep
+# Arquivo Local 0.9.50-phase2-dev — Áudio: visualizador em MP4
+
+## Novidades da 0.9.50 (categoria Áudio, item 10 — fecha as ferramentas do Áudio)
+- Nova ferramenta Áudio › Converter › **Visualizador**: gera um vídeo MP4 (`-visualizador`) com a **onda** ou o **espectro** do áudio, em 720p ou 360p, até 30 minutos.
+- Vídeo em **MPEG-4 Parte 2** (codificador livre do FFmpeg) + áudio AAC 192 kbps. **Não é H.264**: toca em VLC e no Windows, mas alguns sites e celulares só aceitam H.264 (depende da decisão jurídica sobre `libx264`).
+- Depois de gravar, o app decodifica o vídeo inteiro e confere codec, tamanho, duração e etiquetas; senão nada é salvo.
+- Módulo novo `audioviz.py`; `tests/test_audioviz.py` (32 testes, FFmpeg real).
 
 ## Novidades da 0.9.49 (categoria Áudio, item 9)
 - Nova ferramenta Áudio › Editar › **Bleep** (`Audio Bleep`): cobre trechos com um **tom sintético** (grave 500 Hz, médio 1 kHz, agudo 2 kHz) ou com **silêncio**. Os trechos vêm de arrastar na onda («Adicionar seleção da onda») ou de texto: `0:12,5-0:14`, um por linha.

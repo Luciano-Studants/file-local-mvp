@@ -21,7 +21,7 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 | 7 | **Normalizar volume:** EBU R128 (loudnorm em duas passadas); recusa alvos que causam clipping | ✅ 0.9.47 |
 | 8 | **Comprimir:** bitrate-alvo, tamanho como melhor esforço | ✅ 0.9.48 |
 | 9 | **Bleep:** intervalos validados, tom sintético; cópia nova, não é anonimização criptográfica | ✅ 0.9.49 |
-| 10 | **Visualizador em MP4:** exige codificador de vídeo aprovado; por último | |
+| 10 | **Visualizador em MP4:** exige codificador de vídeo aprovado; por último | ✅ 0.9.50 |
 
 ### Decisões de interface
 - Desde o item 3 o Áudio usa a **roda em grupos** (`tool_registry.AUDIO_GROUPS`, `radial_menu.audio_tool_actions`), respeitando o limite de 8 fatias. Hoje só entram operações já entregues (**Ler › Informações**, **Converter › Converter**); o desenho final é: **Ler** (Informações, Metadados), **Converter** (Converter, Comprimir), **Ajustar** (Canais, Normalizar), **Editar** (Cortar, Bleep, Visualizador). Os grupos ficam em `tool_registry` (como `PDF_GROUPS`) e o `test_wheel_layout` passa a cobri-los.
@@ -73,3 +73,11 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 - **Conferência antes de publicar:** codec/canais/duração; com «Remover» não podem restar etiquetas nem capa; decodifica o primeiro, o maior e o último trecho do arquivo novo (FFT: ≥ 90 % da energia na faixa do tom ±10 %; silêncio: abaixo de −50 dB).
 - Avisos sempre dizem que **não é anonimização garantida** (voz pode sobrar em outros trechos, ecos, metadados); recodifica no mesmo formato.
 - Interface: Áudio › Editar › **Bleep**; a onda do item 6 ganhou o modo «selecionar» (arrastar marca um trecho; vermelho = já na lista; posição sob o mouse).
+
+### Item 10 — Visualizador em MP4 (0.9.50)
+- Núcleo `audioviz.py` (sem Qt): áudio → MP4 com **onda** (`showwaves`) ou **espectro** (`showspectrum`), 360p ou 720p, 25 quadros/s, até 30 minutos.
+- **Codificador aprovado: `mpeg4` nativo do FFmpeg (LGPL, MPEG-4 Parte 2) + AAC.** H.264 exige `libx264` (GPL) e fica como pendência jurídica do Vídeo; o app avisa que alguns sites/celulares só aceitam H.264. `mediatools.build_info` agora lista `video_encoders`, e o `probe` informa codec e tamanho do vídeo.
+- Bitrate de vídeo fixo (1500 kbps em 720p, 600 em 360p) → tamanho previsível (≈ 12 MB/min em 720p); limite de 512 MiB.
+- Armadilhas do FFmpeg: `showspectrum=...:fps=N` **trava** com som puro (use `,fps=N` como filtro depois), e `asplit` + `showspectrum` também pode travar → o arquivo é aberto duas vezes (`-i` ×2).
+- Conferência: codec/tamanho do vídeo, AAC, 1 faixa de áudio, duração, etiquetas (se «Remover») e **decodificação completa** sem erro; falhou → nada é salvo.
+- Roda: Converter › Visualizador (3 fatias no grupo).

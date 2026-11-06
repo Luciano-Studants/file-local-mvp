@@ -216,6 +216,7 @@ AUDIO_TRIM = 'Audio Trim'
 AUDIO_NORM = 'Audio Normalize'
 AUDIO_COMPRESS = 'Compress Audio'
 AUDIO_BLEEP = 'Audio Bleep'
+AUDIO_VIZ = 'Audio Visualizer'
 
 # Roda do Áudio (plano em docs/PLANO-CATEGORIA-AUDIO.md): só entram operações já entregues; os grupos mantêm a forma final.
 AUDIO_GROUPS = {
@@ -223,9 +224,10 @@ AUDIO_GROUPS = {
         (AUDIO_INFO, 'Informações', 'Duração, codec, taxa, canais, etiquetas e capa', 'eye'),
         (AUDIO_TAGS, 'Metadados', 'Editar etiquetas, remover capa ou limpar tudo', 'metadata'),
     ]),
-    'convert': ('Converter', 'Trocar o formato ou reduzir o tamanho do áudio', 'audio', [
+    'convert': ('Converter', 'Trocar o formato, reduzir o tamanho ou gerar vídeo', 'audio', [
         (AUDIO_CONVERT, 'Converter', 'Converter para outro formato de áudio', 'audio'),
         (AUDIO_COMPRESS, 'Comprimir', 'Reduzir o tamanho: bitrate-alvo ou tamanho-alvo', 'compress'),
+        (AUDIO_VIZ, 'Visualizador', 'Gerar um vídeo MP4 com a onda ou o espectro do áudio', 'video'),
     ]),
     'edit': ('Editar', 'Cortar o áudio ou cobrir trechos com bleep', 'crop', [
         (AUDIO_TRIM, 'Cortar', 'Escolher início e fim na onda ou remover o silêncio das pontas', 'crop'),
@@ -262,7 +264,7 @@ FORMAT_TARGETS = PNG_TARGETS | {PDF_IMAGES}      # «PDF → imagens» também u
 BASE_INT_OPTIONS = frozenset({'width', 'rotation', 'quality', 'out_quality', 'rename_start', 'rename_digits', 'rename_n', 'vector_width', 'pdf_dpi', 'split_every', 'img_min', 'stamp_size', 'stamp_opacity', 'stamp_margin', 'stamp_angle', 'stamp_start', 'trim_start_ms', 'trim_end_ms', 'comp_kbps', 'comp_size_kb'})
 BASE_PATH_OPTIONS = frozenset({'sign_image'})      # caminhos que não pertencem a uma ferramenta de imagem (assinatura visual do PDF)
 BASE_LIST_OPTIONS = frozenset({'merge_ranges', 'organize_pages', 'redact_areas', 'redact_terms', 'form_values', 'sign_areas', 'bleep_ranges'})      # «Unir PDFs»: um intervalo de páginas (texto) por arquivo, na ordem da lista
-BASE_STR_OPTIONS = frozenset({'background', 'out_format', 'out_flatten', 'rename_pattern', 'to_folder', 'pdf_pages', 'split_mode', 'split_ranges', 'text_mode', 'text_layout', 'ocr_skip', 'meta_info', 'meta_attach', 'meta_js', 'audio_format', 'audio_quality', 'audio_tags', 'chan_mode', 'bleep_mode', 'bleep_tone', 'comp_mode', 'comp_mono', 'norm_target', 'trim_mode', 'trim_exact', 'tag_mode', 'tag_cover', 'tag_title', 'tag_artist', 'tag_album', 'tag_album_artist', 'tag_date', 'tag_genre', 'tag_track', 'tag_disc', 'tag_composer', 'tag_comment', 'pdf_level', 'stamp_kind', 'stamp_text', 'stamp_position', 'stamp_color', 'stamp_bold', 'pdf_password', 'pdf_owner_password', 'perm_print', 'perm_copy', 'perm_edit', 'redact_patterns', 'form_flatten'})
+BASE_STR_OPTIONS = frozenset({'background', 'out_format', 'out_flatten', 'rename_pattern', 'to_folder', 'pdf_pages', 'split_mode', 'split_ranges', 'text_mode', 'text_layout', 'ocr_skip', 'meta_info', 'meta_attach', 'meta_js', 'audio_format', 'audio_quality', 'audio_tags', 'chan_mode', 'bleep_mode', 'bleep_tone', 'viz_style', 'viz_size', 'comp_mode', 'comp_mono', 'norm_target', 'trim_mode', 'trim_exact', 'tag_mode', 'tag_cover', 'tag_title', 'tag_artist', 'tag_album', 'tag_album_artist', 'tag_date', 'tag_genre', 'tag_track', 'tag_disc', 'tag_composer', 'tag_comment', 'pdf_level', 'stamp_kind', 'stamp_text', 'stamp_position', 'stamp_color', 'stamp_bold', 'pdf_password', 'pdf_owner_password', 'perm_print', 'perm_copy', 'perm_edit', 'redact_patterns', 'form_flatten'})
 
 
 def all_int_options() -> frozenset[str]:

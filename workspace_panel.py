@@ -38,6 +38,7 @@ import audiotrim
 import audionorm
 import audiocompress
 import audiobleep
+import audioviz
 from audio_stage import AudioStage
 import mediatools
 from page_organizer import PageOrganizer
@@ -68,6 +69,7 @@ AUDIO_TRIM = tool_registry.AUDIO_TRIM
 AUDIO_NORM = tool_registry.AUDIO_NORM
 AUDIO_COMPRESS = tool_registry.AUDIO_COMPRESS
 AUDIO_BLEEP = tool_registry.AUDIO_BLEEP
+AUDIO_VIZ = tool_registry.AUDIO_VIZ
 READONLY_TOOLS = frozenset({AUDIO_INFO})
 AUDIO_SUFFIXES = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '.aiff', '.aif', '.wma'}
 
@@ -98,6 +100,7 @@ TOOLS = {
         (AUDIO_TRIM, 'Cortar', 'Escolher início e fim na onda ou remover o silêncio das pontas'),
         (AUDIO_BLEEP, 'Bleep', 'Cobrir trechos com um tom (bleep) ou silêncio'),
         (AUDIO_COMPRESS, 'Comprimir', 'Reduzir o tamanho: bitrate-alvo ou tamanho-alvo'),
+        (AUDIO_VIZ, 'Visualizador', 'Gerar um vídeo MP4 com a onda ou o espectro do áudio'),
         (AUDIO_NORM, 'Normalizar', 'Igualar o volume (EBU R128) sem distorcer'),
     ],
     'pdf': [
@@ -143,7 +146,7 @@ LABELS = {
     'Image → PDF': 'Imagem → PDF', **{spec.target: spec.panel_title for spec in tool_registry.IMAGE_TOOLS},
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Imagens embutidas no PDF', 'PDF → Images': 'Páginas do PDF em imagens',
     'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF', 'Stamp PDF': 'Numerar e carimbar o PDF', 'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Compress PDF': 'Comprimir PDF', 'Clean PDF': 'Metadados e cópia limpa do PDF', 'PDF OCR → PDF': 'PDF digitalizado → PDF pesquisável (OCR)', 'PDF OCR → Text': 'PDF digitalizado → texto (OCR)',
-    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Metadados do áudio', AUDIO_CHANNELS: 'Canais do áudio', AUDIO_TRIM: 'Cortar áudio', AUDIO_NORM: 'Normalizar volume', AUDIO_COMPRESS: 'Comprimir áudio', AUDIO_BLEEP: 'Bleep no áudio',
+    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Metadados do áudio', AUDIO_CHANNELS: 'Canais do áudio', AUDIO_TRIM: 'Cortar áudio', AUDIO_NORM: 'Normalizar volume', AUDIO_COMPRESS: 'Comprimir áudio', AUDIO_BLEEP: 'Bleep no áudio', AUDIO_VIZ: 'Visualizador em MP4',
     'Split PDF': 'Dividir e extrair páginas do PDF', 'Organize PDF': 'Organizar páginas do PDF', 'Merge PDFs': 'Unir PDFs',
 }
 FUTURE_SUFFIXES = {
@@ -577,6 +580,10 @@ class FeaturePanel(QMainWindow):
         self.bl_tone = ChipGroup(['Grave', 'Médio', 'Agudo'], per_row=3); self.bl_tone.setCurrentIndex(1)
         self.bl_quality = ChipGroup(['Baixa', 'Média', 'Alta'], per_row=3); self.bl_quality.setCurrentIndex(1)
         self.bl_tags = ChipGroup(['Manter', 'Remover'], per_row=2)
+        self.vz_style = ChipGroup(['Onda', 'Espectro'], per_row=2)
+        self.vz_size = ChipGroup(['720p', '360p'], per_row=2)
+        self.vz_tags = ChipGroup(['Manter', 'Remover'], per_row=2)
+        self.vz_info = QLabel(''); self.vz_info.setWordWrap(True); self.vz_info.setTextFormat(Qt.TextFormat.PlainText)
         self.bl_info = QLabel(''); self.bl_info.setWordWrap(True); self.bl_info.setTextFormat(Qt.TextFormat.PlainText)
         self._bl_selection = (0.0, 0.0)
         self.ca_mode = ChipGroup(['Bitrate-alvo', 'Tamanho-alvo'], per_row=2)
@@ -698,6 +705,7 @@ class FeaturePanel(QMainWindow):
                 ('plevel', 'Nível', self.cp_level), ('pinfo', 'Resultado', self.cp_info),
                 ('aformat', 'Formato', self.ac_format), ('aquality', 'Qualidade', self.ac_quality), ('atags', 'Etiquetas', self.ac_tags), ('ainfo', 'Resultado', self.ac_info),
                 ('blist', 'Trechos', self.bl_list), ('bbuttons', '', self.bl_buttons), ('bmode', 'Cobrir com', self.bl_mode), ('btone', 'Tom', self.bl_tone), ('bquality', 'Qualidade', self.bl_quality), ('btags', 'Etiquetas e capa', self.bl_tags), ('binfo', 'Resultado', self.bl_info),
+                ('vzstyle', 'Estilo', self.vz_style), ('vzsize', 'Tamanho', self.vz_size), ('vztags', 'Etiquetas', self.vz_tags), ('vzinfo', '', self.vz_info),
                 ('cpmode', 'Modo', self.ca_mode), ('cpformat', 'Formato', self.ca_format), ('cpkbps', 'kbps', self.ca_kbps), ('cpsize', 'Tamanho', self.ca_size), ('cpmono', 'Canais', self.ca_mono), ('cptags', 'Etiquetas', self.ca_tags), ('cpinfo', 'Resultado', self.ca_info),
                 ('nmtarget', 'Alvo', self.nm_target), ('nmquality', 'Qualidade', self.nm_quality), ('nminfo', 'Resultado', self.nm_info),
                 ('tmmode', 'Corte', self.tr_mode), ('tmstart', 'Início', self.tr_start), ('tmend', 'Fim', self.tr_end), ('tmexact', 'Precisão', self.tr_exact), ('tmquality', 'Qualidade', self.tr_quality), ('tminfo', 'Resultado', self.tr_info),
@@ -830,6 +838,9 @@ class FeaturePanel(QMainWindow):
             control.valueChanged.connect(self._stamp_changed)
         for chips in (self.ac_format, self.ac_quality, self.ac_tags):
             chips.currentIndexChanged.connect(self._audioconvert_changed)
+        for chips in (self.vz_style, self.vz_size, self.vz_tags):
+            chips.currentIndexChanged.connect(self._audioviz_changed)
+        self.audio_stage.infos_ready.connect(self._audioviz_changed)
         for chips in (self.bl_mode, self.bl_tone, self.bl_quality, self.bl_tags):
             chips.currentIndexChanged.connect(self._audiobleep_changed)
         self.bl_list.textChanged.connect(self._audiobleep_changed)
@@ -912,7 +923,7 @@ class FeaturePanel(QMainWindow):
     # categorias e rodas
     # ------------------------------------------------------------------
     def _capability_for(self, target: str):
-        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS, AUDIO_BLEEP):
+        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS, AUDIO_BLEEP, AUDIO_VIZ):
             return self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
         key = 'images' if target in IMAGE_TARGETS or target.startswith(tool_registry.GROUP_PREFIX) else 'pdf'
         return self.controller.capabilities.get(key, (False, 'Dependência indisponível.'))
@@ -1108,7 +1119,7 @@ class FeaturePanel(QMainWindow):
         for control in (self.crop_x, self.crop_y, self.crop_width, self.crop_height):
             control.setValue(0)
         self.crop_help.setText('Arraste na imagem para definir a área.')
-        if target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS, AUDIO_BLEEP):
+        if target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS, AUDIO_BLEEP, AUDIO_VIZ):
             self.file_preview.clear()
             self.pdf_stage.show_files([])
             audios = [path for path in self.files if Path(path).suffix.lower() in AUDIO_SUFFIXES or Path(path).suffix.lower() in ('.mp4', '.mkv', '.mov', '.webm')]
@@ -1383,6 +1394,7 @@ class FeaturePanel(QMainWindow):
             AUDIO_TAGS: ('atmode', 'atfields', 'atcover', 'atinfo'),
             AUDIO_CHANNELS: ('cmode', 'cquality', 'cinfo'),
             AUDIO_BLEEP: ('blist', 'bbuttons', 'bmode', *(('btone',) if self.bl_mode.currentIndex() == 0 else ()), 'bquality', 'btags', 'binfo'),
+            AUDIO_VIZ: ('vzstyle', 'vzsize', 'vztags', 'vzinfo'),
             AUDIO_COMPRESS: ('cpmode', 'cpformat', 'cpkbps', 'cpsize', 'cpmono', 'cptags', 'cpinfo'),
             AUDIO_NORM: ('nmtarget', 'nmquality', 'nminfo'),
             AUDIO_TRIM: ('tmmode', 'tmstart', 'tmend', 'tmexact', 'tmquality', 'tminfo'),
@@ -1446,6 +1458,7 @@ class FeaturePanel(QMainWindow):
             'Split PDF': 'Escolha como dividir: uma página por PDF, partes de N páginas, grupos de páginas (1-3; 4-6; 7-) ou extrair só algumas páginas para um PDF novo. Várias partes vão numeradas para uma pasta nova ao lado do original, que não muda. Anexos, formulários e assinaturas não são preservados.',
             'Organize PDF': 'Arraste as miniaturas para mudar a ordem; selecione uma ou várias (Ctrl ou Shift) para girar, duplicar, mover ou excluir. O resultado é um PDF novo, «<nome>-organizado.pdf»; o original não muda. Marcadores, anexos, formulários e assinaturas não são preservados.',
             AUDIO_BLEEP: 'Cobre trechos do áudio com um tom (bleep) ou silêncio. Escreva um trecho por linha («início-fim», ex.: 0:12,5-0:14) ou arraste na onda para marcar e clique em «Adicionar seleção da onda». O resto do áudio não é tocado. Recodifica no mesmo formato. ATENÇÃO: isto não é anonimização garantida — o original continua existindo, e o resto do áudio (voz, contexto) pode identificar a pessoa; etiquetas e capa podem ter dados (use «Remover»). Gera «<nome>-bleep»; o original fica intacto.',
+            AUDIO_VIZ: 'Gera um vídeo MP4 (MPEG-4 + AAC) com a onda ou o espectro do áudio, para publicar música ou podcast onde só há vídeo. Até 30 minutos. Não é H.264: toca em VLC e no Windows, mas alguns sites e celulares só aceitam H.264.',
             AUDIO_COMPRESS: 'Recodifica em MP3, M4A, OGG ou Opus para diminuir o tamanho (perde qualidade). Bitrate-alvo: escolha os kbps. Tamanho-alvo: o app calcula o bitrate que caberia, grava, mede e, se passou, tenta uma vez com menos; é melhor esforço, e avisa o tamanho real. Opus rende mais em bitrates baixos (voz: 24–32 kbps). «Mono» reduz mais, mas mistura os canais. Capa e capítulos não são copiados. Se o arquivo novo não ficar menor que o original, nada é salvo. Gera «<nome>-comprimido»; o original fica intacto.',
             AUDIO_NORM: 'Mede o volume do áudio (EBU R128, em LUFS) e aplica um ganho único até o alvo: −23 (TV e rádio), −16 (podcast e vídeo) ou −14 (música em streaming). A dinâmica não é alterada e não há limitador: se o alvo faria o som distorcer (clipping), o app recusa e diz o máximo possível. Recusa também áudio mudo ou que já está no alvo. Recodifica no mesmo formato; depois de gravar, mede o arquivo novo e confere. Gera «<nome>-normalizado»; o original fica intacto.',
             AUDIO_TRIM: 'Início e fim: arraste as alças na onda ou digite os tempos; fica só o trecho entre elas. Silêncio das pontas: remove só o silêncio do começo e do fim (o do meio não é tocado). «Sem recodificar» não perde qualidade, mas o corte cai no quadro de áudio mais próximo (até ~40 ms); «Exato» recodifica. FLAC, WAV e AIFF são sempre exatos e sem perda. Etiquetas e capa são mantidas. Gera «<nome>-cortado»; o original fica intacto.',
@@ -1457,7 +1470,7 @@ class FeaturePanel(QMainWindow):
         }
         self.tool_hint.setText(hints.get(target, 'A operação cria um novo arquivo; o original fica intacto.'))
         self.run_button.setText(self._run_text(target) if target in tool_registry.FORMAT_TARGETS else {**{spec.target: spec.run_label for spec in tool_registry.IMAGE_TOOLS},
-                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Salvar etiquetas', AUDIO_CHANNELS: 'Mudar os canais', AUDIO_TRIM: 'Cortar o áudio', AUDIO_NORM: 'Normalizar o volume', AUDIO_COMPRESS: 'Comprimir o áudio', AUDIO_BLEEP: 'Cobrir trechos com bleep', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
+                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Salvar etiquetas', AUDIO_CHANNELS: 'Mudar os canais', AUDIO_TRIM: 'Cortar o áudio', AUDIO_NORM: 'Normalizar o volume', AUDIO_COMPRESS: 'Comprimir o áudio', AUDIO_BLEEP: 'Cobrir trechos com bleep', AUDIO_VIZ: 'Gerar o vídeo MP4', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
         if target == 'Split PDF':
             self._split_changed()
         if target == 'Organize PDF':
@@ -1491,6 +1504,8 @@ class FeaturePanel(QMainWindow):
             self._audiocompress_changed()
         if target == AUDIO_BLEEP:
             self._audiobleep_changed()
+        if target == AUDIO_VIZ:
+            self._audioviz_changed()
         if target == PDF_STAMP:
             self._stamp_changed()
         if target == PDF_REDACT:
@@ -2458,6 +2473,49 @@ class FeaturePanel(QMainWindow):
         self.ca_size.setEnabled(self.ca_mode.currentIndex() == 1)
         text, ready = self._audiocompress_state()
         self.ca_info.setText(text)
+        self.run_button.setEnabled(ready)
+
+    # --- Visualizador em MP4 ---------------------------------------------------
+    VIZ_STYLES = ('waves', 'spectrum')
+    VIZ_SIZES = ('720p', '360p')
+
+    def _audioviz_values(self) -> dict:
+        return {'viz_style': self.VIZ_STYLES[max(0, self.vz_style.currentIndex())], 'viz_size': self.VIZ_SIZES[max(0, self.vz_size.currentIndex())],
+                'audio_tags': 'drop' if self.vz_tags.currentIndex() == 1 else 'keep'}
+
+    def _audioviz_state(self):
+        if not self.files:
+            return 'Abra um arquivo de áudio ou vídeo.', False
+        capability = self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
+        if not capability[0]:
+            return capability[1], False
+        if not self.audio_stage.infos:
+            return 'Lendo o arquivo…', False
+        build = mediatools.build_info() or {}
+        if build.get('video_encoders') is not None and audioviz.VIDEO_ENCODER not in build['video_encoders']:
+            return 'Este FFmpeg não tem o codificador de vídeo MPEG-4 necessário.', False
+        many = len(self.files) > 1
+        total = 0.0
+        for path, info in self.audio_stage.infos.items():
+            prefix = f'{Path(path).name}: ' if many else ''
+            if info.get('error'):
+                return prefix + str(info['error']), False
+            try:
+                audioviz.plan(info)
+            except mediatools.MediaError as error:
+                return prefix + str(error), False
+            total += float(info.get('duration') or 0)
+        options = audioviz.options_from(self._audioviz_values())
+        width, height, kbps = audioviz.SIZES[options['size']]
+        estimate = int(total * (kbps + audioviz.AUDIO_KBPS) * 125)
+        return (f'{len(self.files)} arquivo(s) em MP4 {width}×{height} ({audioviz.STYLES[options["style"]].lower()}): ≈ {mediatools.human_size(estimate)} no total. '
+                'Vídeo em MPEG-4 (não H.264).'), True
+
+    def _audioviz_changed(self, *_args):
+        if self.selected_tool != AUDIO_VIZ:
+            return
+        text, ready = self._audioviz_state()
+        self.vz_info.setText(text)
         self.run_button.setEnabled(ready)
 
     # --- Normalizar volume -----------------------------------------------------
@@ -3689,6 +3747,11 @@ class FeaturePanel(QMainWindow):
             if not ready:
                 self.status.setText(text); return
             options.update(self._redact_values())
+        if target == AUDIO_VIZ:
+            text, ready = self._audioviz_state()
+            if not ready:
+                self.status.setText(text); return
+            options.update(self._audioviz_values())
         if target == AUDIO_BLEEP:
             text, ready = self._audiobleep_state()
             if not ready:
