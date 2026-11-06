@@ -1,4 +1,10 @@
-# Arquivo Local 0.9.50-phase2-dev — Áudio: visualizador em MP4
+# Arquivo Local 0.9.51-phase2-dev — Portão B do Áudio
+
+## Novidades da 0.9.51 (Portão B do Áudio)
+- `tools/quality_suite.py --only audio`: 104 verificações em 11 funções (converter, etiquetas, canais, cortar, normalizar, comprimir, bleep, visualizador, robustez, determinismo, desempenho) com **oráculo independente** (FFmpeg decodifica, numpy mede frequência, nível e amostras). Inclui taxas 11,025/48/96 kHz, 5.1, MP3 VBR, arquivos corrompidos/vazios/truncados, nomes com acento e «#», rede bloqueada e um arquivo de 4 h pelo worker.
+- A CI (Linux e Windows) passa a rodar a suíte de Áudio e guarda o relatório; `dev.ps1 quality` / `dev.sh quality` incluem o Áudio.
+- Novo `docs/LABORATORIOS.md`: o que roda no Git e roteiro dos laboratórios Linux e Windows, com checklist manual.
+- Resultado no Linux: **aprovado, nenhuma função abaixo de 100**; a suíte reprova de verdade (teste de mutação: tom do bleep trocado).
 
 ## Novidades da 0.9.50 (categoria Áudio, item 10 — fecha as ferramentas do Áudio)
 - Nova ferramenta Áudio › Converter › **Visualizador**: gera um vídeo MP4 (`-visualizador`) com a **onda** ou o **espectro** do áudio, em 720p ou 360p, até 30 minutos.

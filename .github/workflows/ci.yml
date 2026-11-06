@@ -74,12 +74,17 @@ jobs:
       - name: Suíte de qualidade (PDF, rápida)
         if: ${{ !cancelled() }}
         run: python tools/quality_suite.py --only pdf --fast --out quality-report
-      - name: Guardar o relatório de qualidade
+      - name: Suíte de qualidade (Áudio, Portão B)
+        if: ${{ !cancelled() }}
+        run: python tools/quality_suite.py --only audio --out quality-report-audio
+      - name: Guardar os relatórios de qualidade
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-report-${{ matrix.os }}
-          path: quality-report
+          path: |
+            quality-report
+            quality-report-audio
           if-no-files-found: ignore
 
   dependencias:

@@ -6,7 +6,7 @@
 
 ## Testar na sua máquina
 - Abrir o app: `.\dev.ps1 run`
-- Testes: `.\dev.ps1 test` (2–3 min) · Qualidade do PDF: `.\dev.ps1 quality` (relatório em `quality-report\quality-report.md`)
+- Testes: `.\dev.ps1 test` (2–3 min) · Qualidade do PDF e do Áudio: `.\dev.ps1 quality` (relatório em `quality-report\quality-report.md`)
 - Instalador completo (precisa do Inno Setup 6 para o `.exe`): `.\dev.ps1 build` → arquivos em `dist\`
 
 ## Testar sem montar nada (CI)
@@ -21,3 +21,5 @@ Cada funcionalidade nova que aparece numa roda precisa respeitar o limite de 8 f
 
 ## Windows
 O job do Windows agora bloqueia o merge como o do Linux (ficou verde em 02/11/2026). Ele usa uma pasta temporária de caminho longo (`runner.temp`) para evitar o nome curto `RUNNER~1`.
+
+- Laboratórios Linux/Windows e o que a CI cobre: `docs/LABORATORIOS.md`.

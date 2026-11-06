@@ -81,3 +81,7 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 - Armadilhas do FFmpeg: `showspectrum=...:fps=N` **trava** com som puro (use `,fps=N` como filtro depois), e `asplit` + `showspectrum` também pode travar → o arquivo é aberto duas vezes (`-i` ×2).
 - Conferência: codec/tamanho do vídeo, AAC, 1 faixa de áudio, duração, etiquetas (se «Remover») e **decodificação completa** sem erro; falhou → nada é salvo.
 - Roda: Converter › Visualizador (3 fatias no grupo).
+
+### Portão B do Áudio (0.9.51, 06/11/2026)
+- `tools/quality_suite.py --only audio`: 104 verificações, 11 funções, **Linux: aprovado (todas 100)**. Cobre fidelidade (WAV↔FLAC exato; MP3/M4A/OGG/Opus: nota, nível, duração), etiquetas/capa (áudio idêntico ao editar), canais, cortar (exato em WAV, VBR), normalizar (±1 LU, pico, recusa sem limitador), comprimir (bitrate ±15 %), bleep (1 kHz ≥ 90 % da energia, fora intacto), visualizador, robustez (corrompido/vazio/texto/truncado: sem saída parcial, sem rede), determinismo e desempenho (10 min; 4 h pelo worker).
+- Pendente: **rodar no Windows** (a CI já roda a suíte; falta o checklist manual de `docs/LABORATORIOS.md`).

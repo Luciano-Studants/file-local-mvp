@@ -10,7 +10,7 @@ case "${1:-help}" in
   run)     QT_QPA_PLATFORM="" "$PY" app.py ;;
   test)    "$PY" -I -W ignore -m unittest discover -s tests -q ;;
   fast)    "$PY" -I -W ignore -m unittest discover -s tests -q -k pdfform -k pdfredact -k pdfinfo -k stamp ;;   # só um pedaço; ajuste o -k
-  quality) "$PY" tools/quality_suite.py --only pdf --fast --out quality-report ;;
+  quality) "$PY" tools/quality_suite.py --only pdf --fast --out quality-report; "$PY" tools/quality_suite.py --only audio --fast --out quality-report-audio ;;
   smoke)   QT_QPA_PLATFORM="" "$PY" app.py --smoke-test ;;
   *) echo "uso: ./dev.sh setup|doctor|run|test|fast|quality|smoke" ;;
 esac
