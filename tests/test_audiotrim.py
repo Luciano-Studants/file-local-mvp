@@ -259,7 +259,7 @@ class RegistrationTests(unittest.TestCase):
         self.assertIn(engine.AUDIO_TRIM, engine.OPERATIONS); self.assertIn(engine.AUDIO_TRIM, engine.PDF_LONG_TARGETS)
         self.assertTrue({'trim_mode', 'trim_exact'} <= tool_registry.BASE_STR_OPTIONS); self.assertTrue({'trim_start_ms', 'trim_end_ms'} <= tool_registry.BASE_INT_OPTIONS)
         self.assertEqual(list(tool_registry.AUDIO_GROUPS), ['read', 'convert', 'edit', 'adjust'])
-        self.assertEqual([m[0] for m in tool_registry.AUDIO_GROUPS['edit'][3]], [engine.AUDIO_TRIM])
+        self.assertEqual([m[0] for m in tool_registry.AUDIO_GROUPS['edit'][3]], [engine.AUDIO_TRIM, engine.AUDIO_BLEEP])
 
 
 class WaveWidgetTests(unittest.TestCase):

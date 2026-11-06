@@ -1,3 +1,12 @@
+# Arquivo Local 0.9.49-phase2-dev — Áudio: bleep
+
+## Novidades da 0.9.49 (categoria Áudio, item 9)
+- Nova ferramenta Áudio › Editar › **Bleep** (`Audio Bleep`): cobre trechos com um **tom sintético** (grave 500 Hz, médio 1 kHz, agudo 2 kHz) ou com **silêncio**. Os trechos vêm de arrastar na onda («Adicionar seleção da onda») ou de texto: `0:12,5-0:14`, um por linha.
+- Intervalos validados: fora da duração, invertidos, curtos demais ou cobrindo o áudio todo são recusados; sobrepostos são unidos (com aviso). Até 200 trechos.
+- Depois de gravar, o app decodifica o arquivo novo e confere que os trechos foram mesmo substituídos; senão nada é salvo. Etiquetas e capa: manter ou remover.
+- **Aviso fixo: isto não é anonimização garantida** (a voz pode aparecer fora dos trechos marcados; metadados e ecos não são tratados).
+- Módulo novo `audiobleep.py`; `tests/test_audiobleep.py` (38 testes, FFmpeg real). Saída `-bleep`.
+
 # Arquivo Local 0.9.48-phase2-dev — Áudio: comprimir
 
 ## Novidades da 0.9.48 (categoria Áudio, item 8)

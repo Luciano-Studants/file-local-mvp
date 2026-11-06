@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QDesktopServices, QIcon, QImage, QPixmap, QTra
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QColorDialog, QComboBox, QFileDialog, QFormLayout, QFrame, QGridLayout, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
-    QPushButton, QProgressBar, QScrollArea, QDoubleSpinBox, QSpinBox, QStackedWidget,
+    QPlainTextEdit, QPushButton, QProgressBar, QScrollArea, QDoubleSpinBox, QSpinBox, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 
@@ -37,6 +37,7 @@ import audiotags
 import audiotrim
 import audionorm
 import audiocompress
+import audiobleep
 from audio_stage import AudioStage
 import mediatools
 from page_organizer import PageOrganizer
@@ -66,6 +67,7 @@ AUDIO_CHANNELS = tool_registry.AUDIO_CHANNELS
 AUDIO_TRIM = tool_registry.AUDIO_TRIM
 AUDIO_NORM = tool_registry.AUDIO_NORM
 AUDIO_COMPRESS = tool_registry.AUDIO_COMPRESS
+AUDIO_BLEEP = tool_registry.AUDIO_BLEEP
 READONLY_TOOLS = frozenset({AUDIO_INFO})
 AUDIO_SUFFIXES = {'.mp3', '.m4a', '.aac', '.wav', '.flac', '.ogg', '.oga', '.opus', '.aiff', '.aif', '.wma'}
 
@@ -94,6 +96,7 @@ TOOLS = {
         (AUDIO_TAGS, 'Metadados', 'Editar etiquetas, remover capa ou limpar tudo'),
         (AUDIO_CHANNELS, 'Canais', 'Mono, estéreo, só o canal esquerdo ou direito'),
         (AUDIO_TRIM, 'Cortar', 'Escolher início e fim na onda ou remover o silêncio das pontas'),
+        (AUDIO_BLEEP, 'Bleep', 'Cobrir trechos com um tom (bleep) ou silêncio'),
         (AUDIO_COMPRESS, 'Comprimir', 'Reduzir o tamanho: bitrate-alvo ou tamanho-alvo'),
         (AUDIO_NORM, 'Normalizar', 'Igualar o volume (EBU R128) sem distorcer'),
     ],
@@ -140,7 +143,7 @@ LABELS = {
     'Image → PDF': 'Imagem → PDF', **{spec.target: spec.panel_title for spec in tool_registry.IMAGE_TOOLS},
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Imagens embutidas no PDF', 'PDF → Images': 'Páginas do PDF em imagens',
     'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF', 'Stamp PDF': 'Numerar e carimbar o PDF', 'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Compress PDF': 'Comprimir PDF', 'Clean PDF': 'Metadados e cópia limpa do PDF', 'PDF OCR → PDF': 'PDF digitalizado → PDF pesquisável (OCR)', 'PDF OCR → Text': 'PDF digitalizado → texto (OCR)',
-    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Metadados do áudio', AUDIO_CHANNELS: 'Canais do áudio', AUDIO_TRIM: 'Cortar áudio', AUDIO_NORM: 'Normalizar volume', AUDIO_COMPRESS: 'Comprimir áudio',
+    AUDIO_INFO: 'Informações do áudio', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Metadados do áudio', AUDIO_CHANNELS: 'Canais do áudio', AUDIO_TRIM: 'Cortar áudio', AUDIO_NORM: 'Normalizar volume', AUDIO_COMPRESS: 'Comprimir áudio', AUDIO_BLEEP: 'Bleep no áudio',
     'Split PDF': 'Dividir e extrair páginas do PDF', 'Organize PDF': 'Organizar páginas do PDF', 'Merge PDFs': 'Unir PDFs',
 }
 FUTURE_SUFFIXES = {
@@ -566,6 +569,16 @@ class FeaturePanel(QMainWindow):
         self.tr_quality = ChipGroup(['Baixa', 'Média', 'Alta'], per_row=3); self.tr_quality.setCurrentIndex(1)
         self.tr_info = QLabel(''); self.tr_info.setWordWrap(True); self.tr_info.setTextFormat(Qt.TextFormat.PlainText)
         self._tr_syncing = False
+        self.bl_list = QPlainTextEdit(); self.bl_list.setPlaceholderText('Um trecho por linha: início-fim\nex.: 0:12,5-0:14\n       1:02-1:03,5'); self.bl_list.setFixedHeight(110)
+        self.bl_add = QPushButton('Adicionar seleção da onda'); self.bl_add.setEnabled(False)
+        self.bl_clear = QPushButton('Limpar lista')
+        self.bl_buttons = QWidget(); _bl_row = QHBoxLayout(self.bl_buttons); _bl_row.setContentsMargins(0, 0, 0, 0); _bl_row.addWidget(self.bl_add); _bl_row.addWidget(self.bl_clear)
+        self.bl_mode = ChipGroup(['Tom (bleep)', 'Silêncio'], per_row=2)
+        self.bl_tone = ChipGroup(['Grave', 'Médio', 'Agudo'], per_row=3); self.bl_tone.setCurrentIndex(1)
+        self.bl_quality = ChipGroup(['Baixa', 'Média', 'Alta'], per_row=3); self.bl_quality.setCurrentIndex(1)
+        self.bl_tags = ChipGroup(['Manter', 'Remover'], per_row=2)
+        self.bl_info = QLabel(''); self.bl_info.setWordWrap(True); self.bl_info.setTextFormat(Qt.TextFormat.PlainText)
+        self._bl_selection = (0.0, 0.0)
         self.ca_mode = ChipGroup(['Bitrate-alvo', 'Tamanho-alvo'], per_row=2)
         self.ca_format = ChipGroup(['MP3', 'M4A', 'OGG', 'Opus'], per_row=4)
         self.ca_kbps = ChipGroup([f'{k}' for k in audiocompress.KBPS_CHOICES], per_row=5); self.ca_kbps.setCurrentIndex(audiocompress.KBPS_CHOICES.index(audiocompress.DEFAULT_KBPS))
@@ -684,6 +697,7 @@ class FeaturePanel(QMainWindow):
                 ('sstart', 'Primeiro nº', self.st_start), ('spages', 'Páginas', self.st_pages), ('sinfo', 'Exemplo', self.st_info),
                 ('plevel', 'Nível', self.cp_level), ('pinfo', 'Resultado', self.cp_info),
                 ('aformat', 'Formato', self.ac_format), ('aquality', 'Qualidade', self.ac_quality), ('atags', 'Etiquetas', self.ac_tags), ('ainfo', 'Resultado', self.ac_info),
+                ('blist', 'Trechos', self.bl_list), ('bbuttons', '', self.bl_buttons), ('bmode', 'Cobrir com', self.bl_mode), ('btone', 'Tom', self.bl_tone), ('bquality', 'Qualidade', self.bl_quality), ('btags', 'Etiquetas e capa', self.bl_tags), ('binfo', 'Resultado', self.bl_info),
                 ('cpmode', 'Modo', self.ca_mode), ('cpformat', 'Formato', self.ca_format), ('cpkbps', 'kbps', self.ca_kbps), ('cpsize', 'Tamanho', self.ca_size), ('cpmono', 'Canais', self.ca_mono), ('cptags', 'Etiquetas', self.ca_tags), ('cpinfo', 'Resultado', self.ca_info),
                 ('nmtarget', 'Alvo', self.nm_target), ('nmquality', 'Qualidade', self.nm_quality), ('nminfo', 'Resultado', self.nm_info),
                 ('tmmode', 'Corte', self.tr_mode), ('tmstart', 'Início', self.tr_start), ('tmend', 'Fim', self.tr_end), ('tmexact', 'Precisão', self.tr_exact), ('tmquality', 'Qualidade', self.tr_quality), ('tminfo', 'Resultado', self.tr_info),
@@ -720,7 +734,7 @@ class FeaturePanel(QMainWindow):
         common = ('ofmt', 'oqual', 'oflat', 'nfolder', 'nname', 'nexample', 'nstart', 'ndigits', 'vwidth')      # comuns a todas as ferramentas: vêm depois dos controles da própria ferramenta (0.9.26)
         rows = tuple(r for r in rows if r[0] not in common) + tuple(r for r in rows if r[0] in common)
         self.form_fields = {}
-        spanning = ('nfolder', 'bpreview', 'clist', 'cbuttons', 'rbuttons', 'hbuttons', 'rdbuttons', 'fmbuttons', 'fmfields', 'rhelp', 'hhelp', 'ostatus', 'bstatus', 'minfo', 'lhist', 'crop', 'qbuttons')      # sem rótulo ao lado: usam a largura toda
+        spanning = ('nfolder', 'bpreview', 'clist', 'cbuttons', 'rbuttons', 'hbuttons', 'rdbuttons', 'fmbuttons', 'fmfields', 'rhelp', 'hhelp', 'ostatus', 'bstatus', 'minfo', 'lhist', 'crop', 'qbuttons', 'bbuttons')      # sem rótulo ao lado: usam a largura toda
         for key, label, widget in rows:
             if key in spanning and key not in ('lhist', 'crop', 'rhelp', 'hhelp'):
                 self.settings_form.addRow(widget)
@@ -816,6 +830,14 @@ class FeaturePanel(QMainWindow):
             control.valueChanged.connect(self._stamp_changed)
         for chips in (self.ac_format, self.ac_quality, self.ac_tags):
             chips.currentIndexChanged.connect(self._audioconvert_changed)
+        for chips in (self.bl_mode, self.bl_tone, self.bl_quality, self.bl_tags):
+            chips.currentIndexChanged.connect(self._audiobleep_changed)
+        self.bl_list.textChanged.connect(self._audiobleep_changed)
+        self.bl_add.clicked.connect(self._audiobleep_add)
+        self.bl_clear.clicked.connect(lambda: self.bl_list.setPlainText(''))
+        self.audio_stage.wave.range_changed.connect(self._audiobleep_selection)
+        self.audio_stage.wave.loaded.connect(self._audiobleep_changed)
+        self.audio_stage.infos_ready.connect(self._audiobleep_changed)
         for chips in (self.ca_mode, self.ca_format, self.ca_kbps, self.ca_mono, self.ca_tags):
             chips.currentIndexChanged.connect(self._audiocompress_changed)
         self.ca_size.valueChanged.connect(self._audiocompress_changed)
@@ -890,7 +912,7 @@ class FeaturePanel(QMainWindow):
     # categorias e rodas
     # ------------------------------------------------------------------
     def _capability_for(self, target: str):
-        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS):
+        if target.startswith(tool_registry.AUDIO_GROUP_PREFIX) or target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS, AUDIO_BLEEP):
             return self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
         key = 'images' if target in IMAGE_TARGETS or target.startswith(tool_registry.GROUP_PREFIX) else 'pdf'
         return self.controller.capabilities.get(key, (False, 'Dependência indisponível.'))
@@ -1086,15 +1108,16 @@ class FeaturePanel(QMainWindow):
         for control in (self.crop_x, self.crop_y, self.crop_width, self.crop_height):
             control.setValue(0)
         self.crop_help.setText('Arraste na imagem para definir a área.')
-        if target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS):
+        if target in (AUDIO_INFO, AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS, AUDIO_BLEEP):
             self.file_preview.clear()
             self.pdf_stage.show_files([])
             audios = [path for path in self.files if Path(path).suffix.lower() in AUDIO_SUFFIXES or Path(path).suffix.lower() in ('.mp4', '.mkv', '.mov', '.webm')]
-            self.audio_stage.wave.setVisible(target == AUDIO_TRIM)
+            self.audio_stage.wave.setVisible(target in (AUDIO_TRIM, AUDIO_BLEEP))
+            self.audio_stage.wave.set_mode('select' if target == AUDIO_BLEEP else 'handles', 'Arraste na onda para marcar um trecho e clique em «Adicionar seleção da onda»; as áreas vermelhas já estão na lista.' if target == AUDIO_BLEEP else 'Arraste as alças para escolher o trecho que fica; a parte escura será descartada.')
             if audios:
                 if self.audio_stage.paths != audios:
                     self.audio_stage.show_files(audios)
-                if target == AUDIO_TRIM and len(audios) == 1:
+                if target in (AUDIO_TRIM, AUDIO_BLEEP) and len(audios) == 1:
                     self.audio_stage.wave.show_file(audios[0])
                 else:
                     self.audio_stage.wave.reset()
@@ -1106,7 +1129,7 @@ class FeaturePanel(QMainWindow):
             else:
                 self.audio_stage.wave.reset(); self.audio_stage.loudness.reset()
                 self.audio_stage.show_files([])
-                self._stage_message('Abra um arquivo de áudio para ver as informações.' if target == AUDIO_INFO else ('Abra um arquivo de áudio para editar as etiquetas.' if target == AUDIO_TAGS else ('Abra um arquivo de áudio para mudar os canais.' if target == AUDIO_CHANNELS else ('Abra um arquivo de áudio para cortar.' if target == AUDIO_TRIM else ('Abra um arquivo de áudio para normalizar o volume.' if target == AUDIO_NORM else ('Abra um arquivo de áudio ou vídeo para comprimir.' if target == AUDIO_COMPRESS else 'Abra um arquivo de áudio ou vídeo para converter.'))))))
+                self._stage_message('Abra um arquivo de áudio para ver as informações.' if target == AUDIO_INFO else ('Abra um arquivo de áudio para editar as etiquetas.' if target == AUDIO_TAGS else ('Abra um arquivo de áudio para mudar os canais.' if target == AUDIO_CHANNELS else ('Abra um arquivo de áudio para cortar.' if target == AUDIO_TRIM else ('Abra um arquivo de áudio para normalizar o volume.' if target == AUDIO_NORM else ('Abra um arquivo de áudio ou vídeo para comprimir.' if target == AUDIO_COMPRESS else ('Abra um arquivo de áudio para o bleep.' if target == AUDIO_BLEEP else 'Abra um arquivo de áudio ou vídeo para converter.')))))))
             return
         if target not in IMAGE_TARGETS:
             self.file_preview.clear()
@@ -1359,6 +1382,7 @@ class FeaturePanel(QMainWindow):
             AUDIO_CONVERT: ('aformat', 'aquality', 'atags', 'ainfo'),
             AUDIO_TAGS: ('atmode', 'atfields', 'atcover', 'atinfo'),
             AUDIO_CHANNELS: ('cmode', 'cquality', 'cinfo'),
+            AUDIO_BLEEP: ('blist', 'bbuttons', 'bmode', *(('btone',) if self.bl_mode.currentIndex() == 0 else ()), 'bquality', 'btags', 'binfo'),
             AUDIO_COMPRESS: ('cpmode', 'cpformat', 'cpkbps', 'cpsize', 'cpmono', 'cptags', 'cpinfo'),
             AUDIO_NORM: ('nmtarget', 'nmquality', 'nminfo'),
             AUDIO_TRIM: ('tmmode', 'tmstart', 'tmend', 'tmexact', 'tmquality', 'tminfo'),
@@ -1421,6 +1445,7 @@ class FeaturePanel(QMainWindow):
             'PDF → Images': 'Cada página vira uma imagem numerada («pagina-001») numa pasta nova ao lado do PDF. Resolução maior dá mais nitidez e arquivos bem maiores (limite de 40 megapixels por página). Texto e desenhos viram pixels; formulários e anotações não são desenhados. O PDF original não muda.',
             'Split PDF': 'Escolha como dividir: uma página por PDF, partes de N páginas, grupos de páginas (1-3; 4-6; 7-) ou extrair só algumas páginas para um PDF novo. Várias partes vão numeradas para uma pasta nova ao lado do original, que não muda. Anexos, formulários e assinaturas não são preservados.',
             'Organize PDF': 'Arraste as miniaturas para mudar a ordem; selecione uma ou várias (Ctrl ou Shift) para girar, duplicar, mover ou excluir. O resultado é um PDF novo, «<nome>-organizado.pdf»; o original não muda. Marcadores, anexos, formulários e assinaturas não são preservados.',
+            AUDIO_BLEEP: 'Cobre trechos do áudio com um tom (bleep) ou silêncio. Escreva um trecho por linha («início-fim», ex.: 0:12,5-0:14) ou arraste na onda para marcar e clique em «Adicionar seleção da onda». O resto do áudio não é tocado. Recodifica no mesmo formato. ATENÇÃO: isto não é anonimização garantida — o original continua existindo, e o resto do áudio (voz, contexto) pode identificar a pessoa; etiquetas e capa podem ter dados (use «Remover»). Gera «<nome>-bleep»; o original fica intacto.',
             AUDIO_COMPRESS: 'Recodifica em MP3, M4A, OGG ou Opus para diminuir o tamanho (perde qualidade). Bitrate-alvo: escolha os kbps. Tamanho-alvo: o app calcula o bitrate que caberia, grava, mede e, se passou, tenta uma vez com menos; é melhor esforço, e avisa o tamanho real. Opus rende mais em bitrates baixos (voz: 24–32 kbps). «Mono» reduz mais, mas mistura os canais. Capa e capítulos não são copiados. Se o arquivo novo não ficar menor que o original, nada é salvo. Gera «<nome>-comprimido»; o original fica intacto.',
             AUDIO_NORM: 'Mede o volume do áudio (EBU R128, em LUFS) e aplica um ganho único até o alvo: −23 (TV e rádio), −16 (podcast e vídeo) ou −14 (música em streaming). A dinâmica não é alterada e não há limitador: se o alvo faria o som distorcer (clipping), o app recusa e diz o máximo possível. Recusa também áudio mudo ou que já está no alvo. Recodifica no mesmo formato; depois de gravar, mede o arquivo novo e confere. Gera «<nome>-normalizado»; o original fica intacto.',
             AUDIO_TRIM: 'Início e fim: arraste as alças na onda ou digite os tempos; fica só o trecho entre elas. Silêncio das pontas: remove só o silêncio do começo e do fim (o do meio não é tocado). «Sem recodificar» não perde qualidade, mas o corte cai no quadro de áudio mais próximo (até ~40 ms); «Exato» recodifica. FLAC, WAV e AIFF são sempre exatos e sem perda. Etiquetas e capa são mantidas. Gera «<nome>-cortado»; o original fica intacto.',
@@ -1432,7 +1457,7 @@ class FeaturePanel(QMainWindow):
         }
         self.tool_hint.setText(hints.get(target, 'A operação cria um novo arquivo; o original fica intacto.'))
         self.run_button.setText(self._run_text(target) if target in tool_registry.FORMAT_TARGETS else {**{spec.target: spec.run_label for spec in tool_registry.IMAGE_TOOLS},
-                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Salvar etiquetas', AUDIO_CHANNELS: 'Mudar os canais', AUDIO_TRIM: 'Cortar o áudio', AUDIO_NORM: 'Normalizar o volume', AUDIO_COMPRESS: 'Comprimir o áudio', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
+                                 'PDF → Text': 'Extrair texto', 'Extract PDF Images': 'Extrair imagens', PDF_PROTECT: 'Proteger com senha', PDF_UNPROTECT: 'Remover senha', PDF_STAMP: 'Aplicar carimbo', PDF_REDACT: 'Tarjar PDF', PDF_FORM: 'Gerar PDF preenchido', PDF_COMPRESS: 'Comprimir PDF', AUDIO_CONVERT: 'Converter áudio', AUDIO_TAGS: 'Salvar etiquetas', AUDIO_CHANNELS: 'Mudar os canais', AUDIO_TRIM: 'Cortar o áudio', AUDIO_NORM: 'Normalizar o volume', AUDIO_COMPRESS: 'Comprimir o áudio', AUDIO_BLEEP: 'Cobrir trechos com bleep', PDF_CLEAN: 'Gerar cópia limpa', PDF_OCR_PDF: 'Gerar PDF pesquisável', PDF_OCR_TEXT: 'Reconhecer texto', 'Split PDF': 'Dividir PDF', 'Organize PDF': 'Salvar PDF organizado', 'Merge PDFs': 'Unir PDFs'}.get(target, 'Converter'))
         if target == 'Split PDF':
             self._split_changed()
         if target == 'Organize PDF':
@@ -1464,6 +1489,8 @@ class FeaturePanel(QMainWindow):
             self._audionorm_changed()
         if target == AUDIO_COMPRESS:
             self._audiocompress_changed()
+        if target == AUDIO_BLEEP:
+            self._audiobleep_changed()
         if target == PDF_STAMP:
             self._stamp_changed()
         if target == PDF_REDACT:
@@ -2291,6 +2318,84 @@ class FeaturePanel(QMainWindow):
         self.ch_info.setText(text)
         self.run_button.setEnabled(ready)
 
+    # --- Bleep -----------------------------------------------------------------
+    BLEEP_TONES = ('low', 'mid', 'high')
+
+    def _audiobleep_lines(self) -> list:
+        return [line.strip() for line in self.bl_list.toPlainText().replace(';', '\n').split('\n') if line.strip()]
+
+    def _audiobleep_values(self) -> dict:
+        return {'bleep_ranges': self._audiobleep_lines(), 'bleep_mode': 'mute' if self.bl_mode.currentIndex() == 1 else 'tone', 'bleep_tone': self.BLEEP_TONES[max(0, self.bl_tone.currentIndex())],
+                'audio_quality': ('low', 'medium', 'high')[max(0, self.bl_quality.currentIndex())], 'audio_tags': 'drop' if self.bl_tags.currentIndex() == 1 else 'keep'}
+
+    def _audiobleep_state(self):
+        if not self.files:
+            return 'Abra um arquivo de áudio.', False
+        capability = self.controller.capabilities.get('audio', (False, 'FFmpeg indisponível.'))
+        if not capability[0]:
+            return capability[1], False
+        if len(self.files) > 1:
+            return 'Para o bleep, abra um arquivo só (os tempos valem para um áudio específico).', False
+        if not self.audio_stage.infos:
+            return 'Lendo o arquivo…', False
+        info = next(iter(self.audio_stage.infos.values()))
+        if info.get('error'):
+            return str(info['error']), False
+        try:
+            kind = audiotags.kind_of(info)
+        except mediatools.MediaError as error:
+            return str(error), False
+        lines = self._audiobleep_lines()
+        if not lines:
+            return 'Marque trechos na onda ou escreva-os (um por linha, «início-fim»).', False
+        try:
+            ranges = audiobleep.parse_ranges(lines)
+            merged, warnings = audiobleep.plan_ranges(ranges, float(info.get('duration') or 0))
+        except mediatools.MediaError as error:
+            return str(error), False
+        if int(info.get('channels') or 0) > 8:
+            return 'O áudio tem mais de 8 canais; o bleep não é aplicado.', False
+        total = sum(end - start for start, end in merged)
+        text = f'{len(merged)} trecho(s), {audiotrim.fmt_time(total)} no total, de {audiotrim.fmt_time(float(info.get("duration") or 0))}. ' + ' '.join(warnings)
+        if audioconvert.FORMATS[kind]['lossy']:
+            text += f' Recodifica em {audioconvert.FORMATS[kind]["label"]} (com perda).'
+        return text.strip() + ' Não é anonimização garantida.', True
+
+    def _audiobleep_changed(self, *_args):
+        if self.selected_tool != AUDIO_BLEEP:
+            return
+        wave = self.audio_stage.wave
+        marks = []
+        try:
+            marks = [pair for pair in audiobleep.parse_ranges(self._audiobleep_lines())] if self._audiobleep_lines() else []
+        except mediatools.MediaError:
+            marks = []
+        wave.view.marks = marks
+        wave.view.update()
+        start, end = self._bl_selection
+        self.bl_add.setEnabled(end - start >= audiobleep.MIN_LENGTH)
+        self.bl_add.setText(f'Adicionar {audiotrim.fmt_time(start)}–{audiotrim.fmt_time(end)}' if end - start >= audiobleep.MIN_LENGTH else 'Adicionar seleção da onda')
+        text, ready = self._audiobleep_state()
+        self.bl_info.setText(text)
+        self.run_button.setEnabled(ready)
+
+    def _audiobleep_selection(self, start: float, end: float):
+        if self.selected_tool != AUDIO_BLEEP:
+            return
+        self._bl_selection = (start, end)
+        self._audiobleep_changed()
+
+    def _audiobleep_add(self):
+        start, end = self._bl_selection
+        if end - start < audiobleep.MIN_LENGTH:
+            return
+        current = self.bl_list.toPlainText().rstrip('\n')
+        self.bl_list.setPlainText((current + '\n' if current else '') + audiobleep.format_ranges([(start, end)]))
+        self._bl_selection = (0.0, 0.0)
+        self.audio_stage.wave.view.start = self.audio_stage.wave.view.end = 0.0
+        self.audio_stage.wave.view.update()
+        self._audiobleep_changed()
+
     # --- Comprimir áudio -------------------------------------------------------
     COMPRESS_FORMATS = ('mp3', 'm4a', 'ogg', 'opus')
 
@@ -2502,7 +2607,7 @@ class FeaturePanel(QMainWindow):
         self._audiotrim_changed()
 
     def _audiotrim_wave_changed(self, start: float, end: float):
-        if self._tr_syncing:
+        if self._tr_syncing or self.selected_tool != AUDIO_TRIM:
             return
         self._tr_syncing = True
         self.tr_start.setValue(start); self.tr_end.setValue(end)
@@ -3584,6 +3689,11 @@ class FeaturePanel(QMainWindow):
             if not ready:
                 self.status.setText(text); return
             options.update(self._redact_values())
+        if target == AUDIO_BLEEP:
+            text, ready = self._audiobleep_state()
+            if not ready:
+                self.status.setText(text); return
+            options.update(self._audiobleep_values())
         if target == AUDIO_COMPRESS:
             text, ready = self._audiocompress_state()
             if not ready:

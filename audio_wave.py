@@ -32,9 +32,12 @@ class WaveTask(QThread):
 class WaveformView(QWidget):
     """Onda + alças. Tempos em segundos. `range_changed(início, fim)` sai quando o usuário arrasta."""
     range_changed = Signal(float, float)
+    hovered = Signal(float)            # tempo (s) sob o mouse; -1 quando sai
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.mode = 'handles'              # 'handles' (cortar) ou 'select' (arrastar para marcar um trecho)
+        self.marks: list = []              # trechos já marcados (bleep), em segundos
         self.setMinimumHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(130)
@@ -49,6 +52,7 @@ class WaveformView(QWidget):
 
     # --- dados ---
     def set_data(self, peaks: list, duration: float, silence=None, message: str = ''):
+        self.marks = []
         self.peaks, self.duration = list(peaks or []), max(0.0, float(duration or 0))
         self.silence = (float(silence[0]), float(silence[1])) if silence else None
         self.start, self.end = 0.0, self.duration
@@ -102,6 +106,12 @@ class WaveformView(QWidget):
             painter.drawLine(QPointF(x, middle - high * scale), QPointF(x, middle - low * scale - 1))
         painter.setPen(QPen(QColor('#d9cdbd'), 1))
         painter.drawLine(1, int(middle), rect.width() - 2, int(middle))
+        if self.mode == 'select':
+            for a, b in self.marks:
+                painter.fillRect(QRectF(self._x(a), 1, max(2.0, self._x(b) - self._x(a)), rect.height() - 2), QColor(200, 40, 40, 90))
+            if self.end > self.start:
+                painter.fillRect(QRectF(self._x(self.start), 1, max(2.0, self._x(self.end) - self._x(self.start)), rect.height() - 2), QColor(40, 90, 200, 70))
+            return
         shade = QColor(60, 40, 20, 90)                                # a parte que será descartada
         painter.fillRect(QRectF(1, 1, max(0.0, self._x(self.start) - 1), rect.height() - 2), shade)
         painter.fillRect(QRectF(self._x(self.end), 1, max(0.0, rect.width() - 1 - self._x(self.end)), rect.height() - 2), shade)
@@ -121,15 +131,31 @@ class WaveformView(QWidget):
     def mousePressEvent(self, event):
         if event.button() != Qt.MouseButton.LeftButton or not self.peaks or self.duration <= 0:
             return
+        if self.mode == 'select':
+            self._anchor = self._seconds(event.position().x())
+            self._drag = 'select'
+            self.start = self.end = self._anchor
+            self.update()
+            return
         self._drag = self._nearest(event.position().x())
         self._move(event.position().x())
 
     def mouseMoveEvent(self, event):
-        if self._drag:
+        if self.peaks and self.duration > 0:
+            self.hovered.emit(self._seconds(event.position().x()))
+        if self._drag == 'select':
+            here = self._seconds(event.position().x())
+            self.start, self.end = round(min(self._anchor, here), 3), round(max(self._anchor, here), 3)
+            self.update()
+            self.range_changed.emit(self.start, self.end)
+        elif self._drag:
             self._move(event.position().x())
         elif self.peaks:
             near = min(abs(event.position().x() - self._x(self.start)), abs(event.position().x() - self._x(self.end))) <= HANDLE_GRAB
             self.setCursor(Qt.CursorShape.SizeHorCursor if near else Qt.CursorShape.ArrowCursor)
+
+    def leaveEvent(self, _event):
+        self.hovered.emit(-1.0)
 
     def mouseReleaseEvent(self, _event):
         self._drag = None
@@ -154,14 +180,30 @@ class WavePanel(QWidget):
         layout = QVBoxLayout(self); layout.setContentsMargins(0, 0, 0, 0); layout.setSpacing(4)
         self.view = WaveformView()
         self.view.range_changed.connect(self.range_changed)
+        self.view.hovered.connect(self._on_hover)
         self.caption = QLabel('Arraste as alças para escolher o trecho que fica; a parte escura será descartada.')
         self.caption.setObjectName('Caption'); self.caption.setWordWrap(True)
         layout.addWidget(self.view); layout.addWidget(self.caption)
+        self.default_caption = self.caption.text()
         self.path = ''
         self.data: dict = {}
         self.loader = None
         self._token = 0
         self._tasks: list[WaveTask] = []
+
+    def _on_hover(self, seconds: float):
+        if seconds < 0:
+            self.caption.setText(self.default_caption)
+        else:
+            minutes, rest = divmod(seconds, 60)
+            self.caption.setText(f'Posição: {int(minutes)}:{rest:06.3f}'.replace('.', ','))
+
+    def set_mode(self, mode: str, caption: str):
+        """'handles' (cortar) ou 'select' (marcar trechos arrastando)."""
+        self.view.mode = mode
+        self.default_caption = caption
+        self.caption.setText(caption)
+        self.view.update()
 
     def show_file(self, path: str):
         if path == self.path and self.data:
