@@ -36,7 +36,7 @@ LABELS = {
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Extrair imagens embutidas do PDF',
     'PDF → Images': 'Salvar páginas do PDF como imagens',
     'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF',
-    'Stamp PDF': 'Numerar e carimbar o PDF', 'Compress PDF': 'Comprimir PDF', 'Convert Audio': 'Converter áudio', 'Audio Tags': 'Editar etiquetas do áudio', 'Audio Channels': 'Mudar os canais do áudio', 'Audio Trim': 'Cortar o áudio',
+    'Stamp PDF': 'Numerar e carimbar o PDF', 'Compress PDF': 'Comprimir PDF', 'Convert Audio': 'Converter áudio', 'Audio Tags': 'Editar etiquetas do áudio', 'Audio Channels': 'Mudar os canais do áudio', 'Audio Trim': 'Cortar o áudio', 'Audio Normalize': 'Normalizar o volume do áudio',
     'Clean PDF': 'Cópia limpa do PDF (sem metadados)',
     'PDF OCR → PDF': 'Reconhecer texto do PDF digitalizado (PDF pesquisável)', 'PDF OCR → Text': 'Reconhecer texto do PDF digitalizado (texto)',
     'Merge PDFs': 'Unir PDFs',

@@ -42,6 +42,7 @@ required = [
     'ArquivoLocal/source/Desktop/audiotags.py',
     'ArquivoLocal/source/Desktop/audiochannels.py',
     'ArquivoLocal/source/Desktop/audiotrim.py',
+    'ArquivoLocal/source/Desktop/audionorm.py',
     'ArquivoLocal/source/Desktop/audio_wave.py',
     'ArquivoLocal/source/Desktop/audio_stage.py',
     'ArquivoLocal/source/Desktop/bgremove.py',

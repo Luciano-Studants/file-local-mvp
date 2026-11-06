@@ -9,7 +9,7 @@ from __future__ import annotations
 from html import escape
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QObject, Qt, QThread, Signal
 from PySide6.QtWidgets import QLabel, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QWidget
 
 import mediatools
@@ -32,6 +32,57 @@ class AudioLoadTask(QThread):
             self.finished_with.emit(self.token, self.loader(self.job), '')
         except Exception as error:
             self.finished_with.emit(self.token, None, str(error)[:300] or 'Não foi possível ler o áudio.')
+
+
+class LoudnessProbe(QObject):
+    """Mede o volume (LUFS e pico real) de um arquivo no worker, para «Normalizar» mostrar o antes; respostas velhas são descartadas."""
+    ready = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.path = ''
+        self.data: dict = {}
+        self.loader = None                    # testes: chamada síncrona
+        self._token = 0
+        self._tasks: list[AudioLoadTask] = []
+
+    def show_file(self, path: str):
+        if path == self.path and self.data:
+            return
+        self.path, self.data = path, {}
+        self._token += 1
+        if not path:
+            return
+        job = {'op': 'audio_loudness', 'paths': [path]}
+        token = self._token
+        if self.loader is not None:
+            try:
+                self._apply(token, self.loader(job), '')
+            except Exception as error:
+                self._apply(token, None, str(error)[:300])
+            return
+        self._tasks = [t for t in self._tasks if t.isRunning()]
+        task = AudioLoadTask(token, job, lambda j: runner.run_media_op(j, timeout=260))
+        task.finished_with.connect(self._apply)
+        self._tasks.append(task)
+        task.start()
+
+    def reset(self):
+        self.show_file('')
+
+    def _apply(self, token: int, result, error: str):
+        if token != self._token:
+            return
+        self.data = {'error': error} if error or not isinstance(result, dict) else result
+        if error == '' and not isinstance(result, dict):
+            self.data = {'error': 'Não foi possível medir o volume.'}
+        self.ready.emit()
+
+    def shutdown(self):
+        for task in self._tasks:
+            if task.isRunning():
+                task.wait(8000)
+        self._tasks = [t for t in self._tasks if t.isRunning()]
 
 
 def details_html(info: dict) -> str:
@@ -71,6 +122,7 @@ class AudioStage(QWidget):
         self.wave = WavePanel()               # só aparece em «Cortar»
         self.wave.hide()
         layout.addWidget(self.wave)
+        self.loudness = LoudnessProbe(self)
         self.files.hide()
         self.paths: list[str] = []
         self.infos: dict[str, dict] = {}
@@ -166,6 +218,7 @@ class AudioStage(QWidget):
     def shutdown(self):
         """Espera as threads de leitura terminarem (o worker tem tempo máximo); usado ao fechar o painel e nos testes."""
         self.wave.shutdown()
+        self.loudness.shutdown()
         for task in self._tasks:
             if task.isRunning():
                 task.wait(5000)

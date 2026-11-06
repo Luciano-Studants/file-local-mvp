@@ -1,3 +1,13 @@
+# Arquivo Local 0.9.47-phase2-dev — Áudio: normalizar volume
+
+## Novidades da 0.9.47 (categoria Áudio, item 7)
+- Nova ferramenta Áudio › Ajustar › **Normalizar** (`Audio Normalize`): alvos −23 LUFS (EBU R128, TV e rádio), −16 (podcast e vídeo) e −14 (música em streaming). Duas passadas: mede o volume integrado e o pico real (`loudnorm`, BS.1770) e aplica **um ganho único** (a dinâmica não é alterada; não há limitador).
+- **Recusa o que causaria clipping**, dizendo o volume máximo alcançável sem distorcer; recusa também áudio mudo/curto demais, arquivo que já está no alvo e ganhos acima de 30 dB. Pico máximo: −1,5 dBTP em formatos com perda, −1,0 nos demais.
+- Antes de aplicar, o painel mostra o volume atual, o pico real e o ganho (medido no worker). Depois de gravar, o app mede o arquivo novo e só publica se chegou ao alvo (±1,5 LU; avisa acima de ±0,5).
+- Recodifica no mesmo formato (como «Canais»); etiquetas e capa mantidas (MP3, M4A, FLAC). Saída `-normalizado`.
+- Corrigido em «Cortar»: algumas mensagens terminavam com vírgula em vez de ponto.
+- Módulo novo `audionorm.py`; `tests/test_audionorm.py` (28 testes, FFmpeg real).
+
 # Arquivo Local 0.9.46-phase2-dev — Áudio: cortar
 
 ## Novidades da 0.9.46 (categoria Áudio, item 6)

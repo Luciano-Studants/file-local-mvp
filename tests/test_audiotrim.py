@@ -121,6 +121,11 @@ class ArgsAndNotesTests(unittest.TestCase):
         self.assertTrue(audiotrim.notes(None, 'range', False))
 
     def test_fmt_time(self):
+        for text in (' '.join(audiotrim.notes(info(), 'silence', False)),):
+            self.assertIn('0,3 s', text); self.assertTrue(text.count('.') >= 3)          # frases terminam em ponto
+        with self.assertRaises(MediaError) as caught:
+            audiotrim.plan_cut('silence', 0, 0, 4.5, (0.0, 0.0))
+        self.assertTrue(str(caught.exception).endswith('fim.'))
         self.assertEqual(audiotrim.fmt_time(65.5), '1:05,500'); self.assertEqual(audiotrim.fmt_time(-3), '0:00,000')
 
 
