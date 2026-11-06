@@ -7,6 +7,7 @@ from pathlib import Path
 import audiochannels
 import audiotrim
 import audionorm
+import audiocompress
 import audioconvert
 import audiotags
 import bgremove
@@ -26,7 +27,8 @@ AUDIO_TAGS='Audio Tags'
 AUDIO_CHANNELS='Audio Channels'
 AUDIO_TRIM='Audio Trim'
 AUDIO_NORM='Audio Normalize'
-AUDIO_TARGETS=(AUDIO_CONVERT,AUDIO_TAGS,AUDIO_CHANNELS,AUDIO_TRIM,AUDIO_NORM)
+AUDIO_COMPRESS='Compress Audio'
+AUDIO_TARGETS=(AUDIO_CONVERT,AUDIO_TAGS,AUDIO_CHANNELS,AUDIO_TRIM,AUDIO_NORM,AUDIO_COMPRESS)
 RUN_NOTES=[]      # avisos medidos durante o job (fase, clipping…): o worker os devolve junto das saídas e a interface os soma ao relatório
 MAX_PIXELS = 40_000_000
 MAX_OUTPUT = 512 * 1024 * 1024
@@ -62,6 +64,7 @@ TOOL_SUFFIX[AUDIO_TAGS]='etiquetas'
 TOOL_SUFFIX[AUDIO_CHANNELS]='canais'
 TOOL_SUFFIX[AUDIO_TRIM]='cortado'
 TOOL_SUFFIX[AUDIO_NORM]='normalizado'
+TOOL_SUFFIX[AUDIO_COMPRESS]='comprimido'
 RESIZE_MODES = ('percent', 'fit', 'exact')
 RESIZE_MAX_SIDE = 10000
 WATERMARK_POSITIONS = ('tl','tc','tr','ml','c','mr','bl','bc','br','tile')   # cantos, bordas, centro e repetida na diagonal
@@ -76,7 +79,7 @@ ROTATE_ANGLES = (0, 90, 180, 270)      # graus no sentido horário
 ADJUST_RANGE = 100
 REDACT_MAX_REGIONS = 50
 REDACT_MODES = ('black', 'pixelate')
-OPERATIONS = list(IMAGE_OUTPUTS) + ['Image → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF', AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM]
+OPERATIONS = list(IMAGE_OUTPUTS) + ['Image → PDF', 'PDF → Text', 'PDF → Images', 'Merge PDFs', 'Split PDF', 'Organize PDF', 'Extract PDF Images', 'PDF OCR → PDF', 'PDF OCR → Text', 'Clean PDF', 'Compress PDF', 'Stamp PDF', 'Protect PDF', 'Unprotect PDF', 'Redact PDF', 'Fill PDF', AUDIO_CONVERT, AUDIO_TAGS, AUDIO_CHANNELS, AUDIO_TRIM, AUDIO_NORM, AUDIO_COMPRESS]
 RENAMEABLE_TARGETS = frozenset(IMAGE_OUTPUTS) | {'Image → PDF'}      # a colagem usa o mesmo padrão, com {nome} = «colagem»
 class ConversionError(ValueError): pass
 
@@ -501,7 +504,7 @@ REDACT_DEFAULT_DPI=200
 PDF_UNPROTECT='Unprotect PDF'
 PASSWORD_MIN=4
 STAMP_KINDS=('text','watermark')
-PDF_LONG_TARGETS=('PDF OCR → PDF','PDF OCR → Text','Compress PDF','Redact PDF','Convert Audio','Audio Channels','Audio Trim','Audio Normalize')      # jobs que podem passar do tempo padrão do runner
+PDF_LONG_TARGETS=('PDF OCR → PDF','PDF OCR → Text','Compress PDF','Redact PDF','Convert Audio','Audio Channels','Audio Trim','Audio Normalize','Compress Audio')      # jobs que podem passar do tempo padrão do runner
 PDF_OCR_PDF='PDF OCR → PDF'
 PDF_OCR_TEXT='PDF OCR → Text'
 PDF_OCR_TARGETS=(PDF_OCR_PDF,PDF_OCR_TEXT)
@@ -1188,6 +1191,14 @@ def loss_report(paths, target, options=None):
         notes.append('A marca d\'água é desenhada por cima do conteúdo (não por baixo) e pode ser removida por quem editar o PDF: não serve como proteção.' if str(options.get('stamp_kind') or 'text')=='watermark' else 'O carimbo pode cobrir parte do conteúdo se a margem for pequena; confira a posição.')
         notes.append('Assinaturas digitais ficam inválidas (o arquivo foi reescrito); marcadores e anexos são mantidos.')
         return notes
+    if target==AUDIO_COMPRESS:
+        try: opts=audiocompress.options_from(options)
+        except audioconvert.MediaError as error: return [str(error)]
+        info=None
+        try:
+            if paths: info=audioconvert.mediatools.probe(source_file(paths[0],AUDIO_MAX_BYTES))
+        except (audioconvert.MediaError,ConversionError,OSError): info=None
+        return audiocompress.notes(info,opts)
     if target==AUDIO_NORM:
         try: norm,quality=audionorm.options_from(options)
         except audioconvert.MediaError as error: return [str(error)]
@@ -1599,6 +1610,11 @@ def _convert(job):
         elif target==PDF_STAMP:
             if p.suffix.lower()!='.pdf': raise ConversionError('Selecione somente arquivos PDF.')
             results.extend(pdf_stamp(p,read_pdf(p),job,folder,stage))
+        elif target==AUDIO_COMPRESS:
+            try: done=audiocompress.apply(p,stage,job)
+            except audioconvert.MediaError as error: raise ConversionError(f'{p.name}: {error}') from error
+            RUN_NOTES.extend(done['notes'])
+            results.append(publish(stage,folder,p.stem+'-'+done['name'],done['suffix']))
         elif target==AUDIO_NORM:
             try: done=audionorm.apply(p,stage,job)
             except audioconvert.MediaError as error: raise ConversionError(f'{p.name}: {error}') from error
