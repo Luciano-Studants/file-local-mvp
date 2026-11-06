@@ -44,6 +44,7 @@ required = [
     'ArquivoLocal/source/Desktop/audiotrim.py',
     'ArquivoLocal/source/Desktop/audionorm.py',
     'ArquivoLocal/source/Desktop/audiocompress.py',
+    'ArquivoLocal/source/Desktop/audioviz.py',
     'ArquivoLocal/source/Desktop/audiobleep.py',
     'ArquivoLocal/source/Desktop/audio_wave.py',
     'ArquivoLocal/source/Desktop/audio_stage.py',

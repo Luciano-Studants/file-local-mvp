@@ -267,7 +267,7 @@ class RegistrationTests(unittest.TestCase):
         import tool_registry
         self.assertIn(engine.AUDIO_COMPRESS, engine.OPERATIONS); self.assertIn(engine.AUDIO_COMPRESS, engine.PDF_LONG_TARGETS)
         self.assertTrue({'comp_mode', 'comp_mono'} <= tool_registry.BASE_STR_OPTIONS); self.assertTrue({'comp_kbps', 'comp_size_kb'} <= tool_registry.BASE_INT_OPTIONS)
-        self.assertEqual([m[0] for m in tool_registry.AUDIO_GROUPS['convert'][3]], [engine.AUDIO_CONVERT, engine.AUDIO_COMPRESS])
+        self.assertEqual([m[0] for m in tool_registry.AUDIO_GROUPS['convert'][3]], [engine.AUDIO_CONVERT, engine.AUDIO_COMPRESS, engine.AUDIO_VIZ])
 
 
 class PanelTests(unittest.TestCase):
