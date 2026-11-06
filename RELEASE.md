@@ -1,3 +1,13 @@
+# Arquivo Local 0.9.48-phase2-dev — Áudio: comprimir
+
+## Novidades da 0.9.48 (categoria Áudio, item 8)
+- Nova ferramenta Áudio › Converter › **Comprimir** (`Compress Audio`): recodifica em MP3, M4A, OGG ou Opus por **bitrate-alvo** (32–320 kbps, conforme o formato; Opus aceita desde 16) ou por **tamanho-alvo** (melhor esforço).
+- Tamanho-alvo: o app calcula o bitrate que caberia, grava e mede; se passou do alvo, tenta **uma vez** com bitrate menor; se ainda passar (ou o bitrate necessário for baixo demais para o formato), **avisa o tamanho real**. Alvo impossível (abaixo do mínimo do formato) é recusado com sugestões (Opus, mono, tamanho maior).
+- Opção «Mono» (mistura os canais), manter/remover etiquetas; capa e capítulos não são copiados.
+- Recusas: arquivo que já cabe no alvo, bitrate que não reduziria uma origem já pequena (ex.: MP3 de 96 kbps → 128), e saída que não ficaria menor que o original (nada é salvo).
+- Vídeos: só o áudio é comprimido. Vários arquivos aceitos no modo bitrate; tamanho-alvo exige um arquivo só.
+- Módulo novo `audiocompress.py`; `tests/test_audiocompress.py` (35 testes, FFmpeg real). Roda: Converter agora tem Converter e Comprimir.
+
 # Arquivo Local 0.9.47-phase2-dev — Áudio: normalizar volume
 
 ## Novidades da 0.9.47 (categoria Áudio, item 7)
