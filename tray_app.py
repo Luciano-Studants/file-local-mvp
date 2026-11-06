@@ -36,7 +36,7 @@ LABELS = {
     'PDF → Text': 'Extrair texto do PDF', 'Extract PDF Images': 'Extrair imagens embutidas do PDF',
     'PDF → Images': 'Salvar páginas do PDF como imagens',
     'Redact PDF': 'Tarjar conteúdo do PDF', 'Fill PDF': 'Preencher e assinar o PDF', 'Protect PDF': 'Proteger o PDF com senha', 'Unprotect PDF': 'Remover a senha do PDF',
-    'Stamp PDF': 'Numerar e carimbar o PDF', 'Compress PDF': 'Comprimir PDF', 'Convert Audio': 'Converter áudio', 'Audio Tags': 'Editar etiquetas do áudio', 'Audio Channels': 'Mudar os canais do áudio', 'Audio Trim': 'Cortar o áudio', 'Audio Normalize': 'Normalizar o volume do áudio', 'Compress Audio': 'Comprimir o áudio',
+    'Stamp PDF': 'Numerar e carimbar o PDF', 'Compress PDF': 'Comprimir PDF', 'Convert Audio': 'Converter áudio', 'Audio Tags': 'Editar etiquetas do áudio', 'Audio Channels': 'Mudar os canais do áudio', 'Audio Trim': 'Cortar o áudio', 'Audio Normalize': 'Normalizar o volume do áudio', 'Compress Audio': 'Comprimir o áudio', 'Audio Bleep': 'Cobrir trechos com bleep',
     'Clean PDF': 'Cópia limpa do PDF (sem metadados)',
     'PDF OCR → PDF': 'Reconhecer texto do PDF digitalizado (PDF pesquisável)', 'PDF OCR → Text': 'Reconhecer texto do PDF digitalizado (texto)',
     'Merge PDFs': 'Unir PDFs',
@@ -152,7 +152,7 @@ class JobController(QObject):
         if plan is not None and not (target == 'Organize PDF' and isinstance(plan, list) and 1 <= len(plan) <= 200 and all(isinstance(x, str) and len(x) <= 7 for x in plan)):
             self.notify('Arquivo Local', 'Opções do job inválidas.')
             return False
-        for key, limit, owner, size in (('redact_areas', 300, 'Redact PDF', 64), ('redact_terms', 20, 'Redact PDF', 64), ('form_values', 200, 'Fill PDF', 1300), ('sign_areas', 10, 'Fill PDF', 64)):
+        for key, limit, owner, size in (('redact_areas', 300, 'Redact PDF', 64), ('redact_terms', 20, 'Redact PDF', 64), ('form_values', 200, 'Fill PDF', 1300), ('sign_areas', 10, 'Fill PDF', 64), ('bleep_ranges', 200, 'Audio Bleep', 64)):
             value = options.get(key)
             if value is not None and not (target == owner and isinstance(value, list) and len(value) <= limit and all(isinstance(x, str) and len(x) <= size for x in value)):
                 self.notify('Arquivo Local', 'Opções do job inválidas.')

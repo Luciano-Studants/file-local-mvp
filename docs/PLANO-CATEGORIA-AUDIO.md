@@ -20,7 +20,7 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 | 6 | **Cortar:** início/fim com onda visual; silêncio só nas pontas | ✅ 0.9.46 |
 | 7 | **Normalizar volume:** EBU R128 (loudnorm em duas passadas); recusa alvos que causam clipping | ✅ 0.9.47 |
 | 8 | **Comprimir:** bitrate-alvo, tamanho como melhor esforço | ✅ 0.9.48 |
-| 9 | **Bleep:** intervalos validados, tom sintético; cópia nova, não é anonimização criptográfica | |
+| 9 | **Bleep:** intervalos validados, tom sintético; cópia nova, não é anonimização criptográfica | ✅ 0.9.49 |
 | 10 | **Visualizador em MP4:** exige codificador de vídeo aprovado; por último | |
 
 ### Decisões de interface
@@ -67,3 +67,9 @@ Decisão (03/11/2026): Áudio é a próxima categoria. Motivos: é a Fase 4 do r
 - **Clipping (surround → mono/estéreo):** mede o pico da mistura; se passar de −0,3 dBFS reduz o volume o mínimo necessário (`volume=-X dB`) e avisa; excesso absurdo (> 24 dB) é recusado.
 - **Avisos medidos voltam do worker:** `engine.RUN_NOTES` → campo opcional `notes` na resposta do worker → `runner.LAST_NOTES`/`take_notes()` → `JobController.last_report` (os avisos vêm antes do relatório estático). O formato `outputs` não mudou, e as leituras de interface (`audio_info`) não tocam nas notas.
 - Roda: novo grupo **Ajustar › Canais** (`AUDIO_GROUPS['adjust']`); a roda de primeiro nível passou a ter 3 fatias (Ler, Converter, Ajustar).
+
+### Item 9 — Bleep (0.9.49)
+- Núcleo `audiobleep.py` (sem Qt): `parse_time`/`parse_ranges` (texto «início-fim», um por linha ou separado por `;`; tempos `12,5`, `1:02,5`, `0:01:02.5`; só dígitos ASCII), `plan_ranges` (valida contra a duração, junta sobreposições com aviso, recusa cobrir o áudio inteiro), `audio_filter` (`aeval` por canal: seno de 500/1000/2000 Hz a 0,25 ou silêncio dentro dos intervalos; só números calculados pelo app entram no filtro), `build_args`, `apply`.
+- **Conferência antes de publicar:** codec/canais/duração; com «Remover» não podem restar etiquetas nem capa; decodifica o primeiro, o maior e o último trecho do arquivo novo (FFT: ≥ 90 % da energia na faixa do tom ±10 %; silêncio: abaixo de −50 dB).
+- Avisos sempre dizem que **não é anonimização garantida** (voz pode sobrar em outros trechos, ecos, metadados); recodifica no mesmo formato.
+- Interface: Áudio › Editar › **Bleep**; a onda do item 6 ganhou o modo «selecionar» (arrastar marca um trecho; vermelho = já na lista; posição sob o mouse).
