@@ -159,6 +159,7 @@ def apply(source: Path, stage: Path, job: dict) -> dict:
     kind = audiotags.kind_of(info)
     spec = audioconvert.FORMATS[kind]
     build = mediatools.build_info()
+    mediatools.require_filters('normalize')
     if build and build.get('encoders') is not None and not set(mediatools.OUTPUT_ENCODERS[kind]) & set(build['encoders']):
         raise MediaError(f'Este FFmpeg não tem o codificador de {spec["label"]}.')
     if info['duration'] <= 0 and not spec['lossy']:

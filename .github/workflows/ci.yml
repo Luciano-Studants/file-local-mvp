@@ -99,8 +99,7 @@ jobs:
       - run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Consistência (pip check)
         run: python -m pip check
-      - name: Vulnerabilidades conhecidas (pip-audit)
-        continue-on-error: true      # informativo: vira bloqueante quando não houver pendências
+      - name: Vulnerabilidades conhecidas (pip-audit)      # bloqueante desde 06/11/2026 (pypdf 6.21.4 zerou as pendências)
         run: pip-audit -r requirements.txt
       - name: Licenças (bloqueia AGPL)
         run: |

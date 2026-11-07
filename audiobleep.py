@@ -272,6 +272,7 @@ def apply(source: Path, stage: Path, job: dict) -> dict:
         raise MediaError('Não foi possível saber quantos canais o áudio tem (ou passam de 8).')
     ranges, warnings = plan_ranges(options['ranges'], info['duration'])
     build = mediatools.build_info()
+    mediatools.require_filters('bleep')
     if build and build.get('encoders') is not None and not set(mediatools.OUTPUT_ENCODERS[kind]) & set(build['encoders']):
         raise MediaError(f'Este FFmpeg não tem o codificador de {spec["label"]}.')
     if audioconvert.estimate_bytes(kind, options['quality'], info) > audioconvert.MAX_OUTPUT_BYTES * audioconvert.SAFETY_MARGIN:

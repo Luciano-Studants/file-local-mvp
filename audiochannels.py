@@ -155,6 +155,7 @@ def apply(source: Path, stage: Path, job: dict) -> dict:
     chosen = plan(info, mode)
     spec = audioconvert.FORMATS[kind]
     build = mediatools.build_info()
+    mediatools.require_filters('channels')
     if build and build.get('encoders') is not None and not set(mediatools.OUTPUT_ENCODERS[kind]) & set(build['encoders']):
         raise MediaError(f'Este FFmpeg não tem o codificador de {spec["label"]}.')
     estimate = audioconvert.estimate_bytes(kind, quality, {**info, 'channels': chosen['out']})

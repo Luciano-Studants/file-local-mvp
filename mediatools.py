@@ -141,6 +141,50 @@ def parse_video_encoders(text: str) -> set:
     return names
 
 
+FILTERS_NEEDED = {
+    'channels': ('aresample', 'astats', 'pan', 'volume'),
+    'trim': ('silencedetect',),
+    'normalize': ('loudnorm', 'volume'),
+    'bleep': ('aeval',),
+    'viz': ('aformat', 'format', 'fps', 'showspectrum', 'showwaves'),
+}
+
+
+def parse_filters(text: str) -> set:
+    """Nomes dos filtros da saída de `ffmpeg -filters` (linhas « TSC nome  A->A  descrição»)."""
+    names = set()
+    for line in text.splitlines():
+        match = re.match(r'^\s*[T\.][S\.][C\.]\s+(\S+)\s+\S+->\S+\s', line)
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+def unavailable_tools(info: dict) -> list:
+    """Ferramentas de Áudio que este build não consegue executar (filtro ou codificador de vídeo ausente)."""
+    gaps = []
+    filters = info.get('filters')
+    if filters is not None:
+        labels = {'channels': 'Canais', 'trim': 'Cortar por silêncio', 'normalize': 'Normalizar', 'bleep': 'Bleep', 'viz': 'Visualizador'}
+        for tool, names in FILTERS_NEEDED.items():
+            missing = [name for name in names if name not in filters]
+            if missing:
+                gaps.append(f"{labels[tool]} (sem filtro {', '.join(missing)})")
+    if info.get('video_encoders') is not None and 'mpeg4' not in info['video_encoders'] and not any('Visualizador' in g for g in gaps):
+        gaps.append('Visualizador (sem codificador mpeg4)')
+    return gaps
+
+
+def require_filters(tool: str) -> None:
+    """Recusa com explicação quando este FFmpeg foi compilado sem um filtro que a ferramenta usa (builds enxutos)."""
+    build = build_info()
+    if not build or build.get('filters') is None:
+        return
+    missing = [name for name in FILTERS_NEEDED[tool] if name not in build['filters']]
+    if missing:
+        raise MediaError('Este FFmpeg foi compilado sem o filtro «' + '», «'.join(missing) + '» que esta ferramenta usa. Use um build completo (veja docs/DEPENDENCIAS.md).')
+
+
 def build_info(refresh: bool = False) -> dict | None:
     """Versão, licença e codificadores de áudio do FFmpeg encontrado (None se não houver)."""
     if 'build' in _cache and not refresh:
@@ -153,6 +197,7 @@ def build_info(refresh: bool = False) -> dict | None:
         encoders = parse_encoders(listing)
         info['encoders'] = sorted(encoders)
         info['video_encoders'] = sorted(parse_video_encoders(listing))
+        info['filters'] = sorted(parse_filters(run_tool(exe, ['-filters'])))
         info['outputs'] = sorted(fmt for fmt, names in OUTPUT_ENCODERS.items() if any(name in encoders for name in names))
         info['exe'] = exe
     _cache['build'] = info
@@ -181,7 +226,10 @@ def capability_report() -> dict:
         return {'found': False, 'distributable': False, 'note': 'FFmpeg não encontrado.'}
     distributable = info['license'] == 'lgpl'
     note = 'Build LGPL: pode acompanhar o aplicativo.' if distributable else f"Build {info['license'].upper()}: serve para desenvolver e testar, mas NÃO pode acompanhar o aplicativo (use um build LGPL)."
-    return {'found': True, 'distributable': distributable, 'note': note, **{key: info[key] for key in ('version', 'license', 'outputs', 'exe')}}
+    gaps = unavailable_tools(info)
+    if gaps:
+        note += ' Ferramentas que este build não atende: ' + '; '.join(gaps) + '.'
+    return {'found': True, 'distributable': distributable, 'note': note, 'gaps': gaps, **{key: info[key] for key in ('version', 'license', 'outputs', 'exe')}}
 
 
 # ---------------------------------------------------------------------------

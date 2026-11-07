@@ -10,7 +10,7 @@ Fonte única do que o projeto usa, do que já está instalado e do que cada cate
 | pypdf, pypdfium2 | PDF (estrutura, renderização) | BSD-3, Apache-2.0/BSD-3 |
 | cryptography (+cffi, pycparser) | Proteger/remover senha | Apache-2.0/BSD |
 | resvg-py | SVG | MPL-2.0 |
-| numpy, onnxruntime | Remoção de fundo (U²-Net-p) | BSD, MIT |
+| numpy, onnxruntime | Remoção de fundo (U²-Net-p); numpy também confere o Bleep do Áudio | BSD, MIT |
 | PySide6-Essentials, shiboken6 | Interface | LGPL-3.0 |
 | pywin32 (só Windows) | Integração com o shell | PSF |
 
@@ -30,8 +30,21 @@ Ferramentas de desenvolvimento (requirements-dev.txt): PyInstaller (empacotament
 | Categoria | Pacotes | Observação |
 |---|---|---|
 | Documentos | python-docx, python-pptx, openpyxl, odfpy, defusedxml, markdown-it-py | defusedxml obrigatório para qualquer XML de entrada |
-| Áudio | FFmpeg; Mutagen (opcional, GPL-2+) para tags | Mutagen só após confirmar compatibilidade com GPL-3.0-only |
+| Áudio — fechada (0.9.50) | só o FFmpeg; Mutagen **não** é usado (as etiquetas passam pelo FFmpeg/ffprobe) | ver «Requisitos do build do FFmpeg» abaixo |
 | Vídeo | FFmpeg; opencv-python-headless (opcional) | Evitar builds com `--enable-nonfree` |
 | Dados/Texto | (stdlib; markdown-it-py se Markdown) | — |
+
+## Requisitos do build do FFmpeg (checklist para fixar o build LGPL do Windows)
+
+O app confere isto sozinho (`mediatools.build_info`, `python tools/doctor.py`); um build que não atende recusa só a ferramenta afetada, com explicação.
+- **Licença:** sem `--enable-gpl`, sem `--enable-nonfree` (o `package.py` recusa). Sem `libx264`/`libx265`.
+- **Codificadores de áudio:** `libmp3lame`, `aac`, `flac`, `libvorbis`, `libopus`, `pcm_s16le` (WAV/AIFF).
+- **Codificador de vídeo:** `mpeg4` (nativo; usado só pelo Visualizador). H.264/HEVC dependem de decisão jurídica.
+- **Filtros:** `aformat`, `aresample`, `astats`, `pan`, `volume`, `silencedetect`, `loudnorm`, `aeval`, `showwaves`, `showspectrum`, `fps`, `format`.
+- **Formatos de entrada/saída:** mp3, mov/mp4/m4a, flac, ogg, opus, wav, aiff, matroska/webm (entrada); muxers `mp4`, `ipod`/`ogg`/`opus` conforme o formato.
+- **Registrar** em `THIRD_PARTY_NOTICES.md`: versão, origem, SHA-256 do arquivo baixado e licenças das bibliotecas embutidas (lame, opus, vorbis, ogg).
+
+## Vulnerabilidades (pip-audit)
+Rodar `pip-audit -r requirements.txt` a cada atualização de dependência (a CI faz de forma informativa). 06/11/2026: pypdf 6.21.1 tinha 10 avisos, corrigidos em **6.21.4** (atualizado). A 7.0.0 existe, mas é versão principal nova: avaliar só com uma rodada completa de testes do PDF.
 
 Regra: pacote novo só entra com versão fixada, licença conferida (compatível com GPL-3.0-only, sem AGPL), registro em `THIRD_PARTY_NOTICES.md` e teste.

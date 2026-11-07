@@ -209,6 +209,8 @@ def apply(source: Path, stage: Path, job: dict) -> dict:
     if (exact or kind in LOSSLESS) and build and build.get('encoders') is not None and not set(mediatools.OUTPUT_ENCODERS[kind]) & set(build['encoders']):
         raise MediaError(f'Este FFmpeg não tem o codificador de {spec["label"]}.')
     source_path = str(source.resolve())
+    if mode == 'silence':
+        mediatools.require_filters('trim')
     edges = detect_edges(exe, source_path, info['duration']) if mode == 'silence' else None
     start, length = plan_cut(mode, start_ms, end_ms, info['duration'], edges)
     if stage.exists():

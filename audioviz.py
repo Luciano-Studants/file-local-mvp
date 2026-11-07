@@ -131,6 +131,7 @@ def apply(source: Path, stage: Path, job: dict) -> dict:
     if not exe or not mediatools.find_tool('ffprobe'):
         raise MediaError('O FFmpeg não foi encontrado neste computador. Instale-o (veja docs/DEPENDENCIAS.md) e tente de novo.')
     build = mediatools.build_info()
+    mediatools.require_filters('viz')
     if build and build.get('encoders') is not None:
         if 'aac' not in build['encoders']:
             raise MediaError('Este FFmpeg não tem o codificador de áudio AAC.')
