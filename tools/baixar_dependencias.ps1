@@ -6,7 +6,7 @@
  Para fixar a versão (recomendado para release): preencha tools\dependencias.json (url e sha256 do FFmpeg). Sem isso, usa o build mais recente e só confere o checksum publicado junto.
  O que for baixado é registrado em ffmpeg\ORIGEM.txt (url, SHA-256, data, versão).
 #>
-param([ValidateSet('todos','ffmpeg','tesseract')][string]$Somente = 'todos', [string]$FFmpegUrl = '', [string]$FFmpegSha256 = '')
+param([ValidateSet('todos','ffmpeg','tesseract')][string]$Somente = 'todos', [string]$FFmpegUrl = '', [string]$FFmpegSha256 = '', [switch]$AceitarSemChecksum)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $pin = Join-Path $PSScriptRoot 'dependencias.json'
@@ -32,10 +32,17 @@ function Install-FFmpeg {
             if ($hash -ne $FFmpegSha256.ToLower()) { throw "SHA-256 diferente do fixado (esperado $FFmpegSha256, obtido $hash). Nada foi instalado." }
             Write-Host 'SHA-256 confere com o valor fixado.'
         } else {
-            $sums = Invoke-WebRequest -Uri ($url.Substring(0, $url.LastIndexOf('/') + 1) + 'checksums.sha256') -UseBasicParsing
-            $line = ($sums.Content -split "`n") | Where-Object { $_ -match [regex]::Escape((Split-Path $url -Leaf)) } | Select-Object -First 1
-            if (-not $line) { throw 'Não achei o checksum publicado para este arquivo; fixe o SHA-256 em tools\dependencias.json.' }
-            if ($hash -ne ($line -split '\s+')[0].ToLower()) { throw 'SHA-256 não confere com o publicado. Nada foi instalado.' }
+            $sumFile = Join-Path $tmp 'checksums.sha256'
+            $line = $null
+            try {
+                Invoke-WebRequest -Uri ($url.Substring(0, $url.LastIndexOf('/') + 1) + 'checksums.sha256') -OutFile $sumFile -UseBasicParsing
+                $name = Split-Path $url -Leaf
+                $line = Get-Content $sumFile | Where-Object { $_ -like "*$name*" } | Select-Object -First 1
+            } catch { Write-Host "Não consegui ler o checksum publicado: $($_.Exception.Message)" }
+            if (-not $line) {
+                if (-not $AceitarSemChecksum) { throw "Sem checksum publicado para conferir. SHA-256 do arquivo baixado: $hash`nSe confiar na origem, rode de novo com -AceitarSemChecksum (ou fixe o valor em tools\dependencias.json)." }
+                Write-Host "AVISO: sem checksum publicado; seguindo por sua conta. SHA-256 $hash"
+            } elseif ($hash -ne ($line.Trim() -split '\s+')[0].ToLower()) { throw 'SHA-256 não confere com o publicado. Nada foi instalado.' }
             Write-Host "AVISO: versão não fixada; SHA-256 $hash. Para release, copie-o para tools\dependencias.json."
         }
         $ext = Join-Path $tmp 'x'
