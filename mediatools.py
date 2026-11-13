@@ -154,20 +154,39 @@ def parse_filters(text: str) -> set:
     """Nomes dos filtros da saída de `ffmpeg -filters` (linhas « TSC nome  A->A  descrição»)."""
     names = set()
     for line in text.splitlines():
-        match = re.match(r'^\s*[T\.][S\.][C\.]\s+(\S+)\s+\S+->\S+\s', line)
+        match = re.match(r'^\s*[A-Za-z\.\|]{3}\s+(\S+)\s+\S+->\S+\s', line)
         if match:
             names.add(match.group(1))
     return names
 
 
+def _filter_exists(exe: str, name: str) -> bool:
+    """Confirma um filtro direto com o FFmpeg (`-h filter=nome`); na dúvida (erro, tempo) diz que existe, para não bloquear à toa."""
+    key = ('filter', exe, name)
+    if key not in _cache:
+        try:
+            text = run_tool(exe, ['-h', 'filter=' + name], timeout=15)
+            _cache[key] = 'Unknown filter' not in text and ('Filter ' + name) in text
+        except MediaError:
+            _cache[key] = True
+    return _cache[key]
+
+
+def _missing(info: dict, names) -> list:
+    """Filtros de `names` que o build não tem: o que a lista não mostra é conferido um a um (o formato de `-filters` muda entre versões)."""
+    filters = info.get('filters')
+    if filters is None:
+        return []
+    return [name for name in names if name not in filters and not _filter_exists(info.get('exe', ''), name)]
+
+
 def unavailable_tools(info: dict) -> list:
     """Ferramentas de Áudio que este build não consegue executar (filtro ou codificador de vídeo ausente)."""
     gaps = []
-    filters = info.get('filters')
-    if filters is not None:
+    if info.get('filters') is not None:
         labels = {'channels': 'Canais', 'trim': 'Cortar por silêncio', 'normalize': 'Normalizar', 'bleep': 'Bleep', 'viz': 'Visualizador'}
         for tool, names in FILTERS_NEEDED.items():
-            missing = [name for name in names if name not in filters]
+            missing = _missing(info, names)
             if missing:
                 gaps.append(f"{labels[tool]} (sem filtro {', '.join(missing)})")
     if info.get('video_encoders') is not None and 'mpeg4' not in info['video_encoders'] and not any('Visualizador' in g for g in gaps):
@@ -180,7 +199,7 @@ def require_filters(tool: str) -> None:
     build = build_info()
     if not build or build.get('filters') is None:
         return
-    missing = [name for name in FILTERS_NEEDED[tool] if name not in build['filters']]
+    missing = _missing(build, FILTERS_NEEDED[tool])
     if missing:
         raise MediaError('Este FFmpeg foi compilado sem o filtro «' + '», «'.join(missing) + '» que esta ferramenta usa. Use um build completo (veja docs/DEPENDENCIAS.md).')
 
@@ -197,7 +216,8 @@ def build_info(refresh: bool = False) -> dict | None:
         encoders = parse_encoders(listing)
         info['encoders'] = sorted(encoders)
         info['video_encoders'] = sorted(parse_video_encoders(listing))
-        info['filters'] = sorted(parse_filters(run_tool(exe, ['-filters'])))
+        found = parse_filters(run_tool(exe, ['-filters']))
+        info['filters'] = sorted(found) if len(found) > 20 else None      # lista irreconhecível → não bloquear (cada filtro é conferido na hora)
         info['outputs'] = sorted(fmt for fmt, names in OUTPUT_ENCODERS.items() if any(name in encoders for name in names))
         info['exe'] = exe
     _cache['build'] = info

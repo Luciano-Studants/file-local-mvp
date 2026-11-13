@@ -28,6 +28,10 @@ LISTING = """Filters:
 
 
 class ParseTests(unittest.TestCase):
+    def test_parse_filters_accepts_other_flag_letters(self):
+        text = ' TSC aeval A->A x\n XYZ novo A->V y\n'
+        self.assertEqual(mediatools.parse_filters(text), {'aeval', 'novo'})
+
     def test_parse_filters_reads_names_only(self):
         self.assertEqual(mediatools.parse_filters(LISTING), {'aformat', 'volume', 'showwaves', 'loudnorm', 'aeval', 'anullsrc'})
 
@@ -41,6 +45,10 @@ class ParseTests(unittest.TestCase):
 
 
 class RequireTests(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(mediatools, '_filter_exists', return_value=False)     # o build de mentira não tem nenhum filtro fora da lista
+        patcher.start(); self.addCleanup(patcher.stop)
+
     def build(self, filters, video=('mpeg4',)):
         return {'version': '7', 'license': 'lgpl', 'encoders': ['aac'], 'video_encoders': list(video), 'filters': filters, 'outputs': ['mp3'], 'exe': '/x/ffmpeg'}
 
@@ -96,7 +104,7 @@ class ApplyRefusesTests(unittest.TestCase):
         real = mediatools.build_info(refresh=True)
         lean = {**real, 'filters': ['volume']}
         cases = ((audiochannels, {'chan_mode': 'stereo'}), (audionorm, {'norm_target': 'podcast'}), (audiobleep, {'bleep_ranges': ['0-1']}), (audioviz, {}), (audiotrim, {'trim_mode': 'silence'}))
-        with mock.patch.object(mediatools, 'build_info', return_value=lean):
+        with mock.patch.object(mediatools, 'build_info', return_value=lean), mock.patch.object(mediatools, '_filter_exists', return_value=False):
             for module, job in cases:
                 with self.subTest(module=module.__name__):
                     stage = self.dir / f'{module.__name__}.out'
@@ -107,3 +115,37 @@ class ApplyRefusesTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ConfirmationTests(unittest.TestCase):
+    """Se a lista de `-filters` não mostrar um filtro, o app pergunta ao FFmpeg antes de recusar (formato muda entre versões)."""
+    def info(self):
+        return {'filters': ['volume'], 'exe': '/x/ffmpeg'}
+
+    def test_filter_found_by_direct_check_is_not_missing(self):
+        with mock.patch.object(mediatools, '_filter_exists', return_value=True):
+            self.assertEqual(mediatools._missing(self.info(), ('aeval', 'volume')), [])
+
+    def test_filter_really_missing(self):
+        with mock.patch.object(mediatools, '_filter_exists', return_value=False):
+            self.assertEqual(mediatools._missing(self.info(), ('aeval', 'volume')), ['aeval'])
+
+    def test_unreadable_list_never_blocks(self):
+        self.assertEqual(mediatools._missing({'filters': None}, ('aeval',)), [])
+
+    def test_filter_exists_parses_the_help_output(self):
+        mediatools._cache.clear()
+        with mock.patch.object(mediatools, 'run_tool', return_value='Filter aeval\n  Filter audio signal\n'):
+            self.assertTrue(mediatools._filter_exists('/x/ffmpeg', 'aeval'))
+        mediatools._cache.clear()
+        with mock.patch.object(mediatools, 'run_tool', return_value="Unknown filter 'aeval'.\n"):
+            self.assertFalse(mediatools._filter_exists('/x/ffmpeg', 'aeval'))
+        mediatools._cache.clear()
+        with mock.patch.object(mediatools, 'run_tool', side_effect=MediaError('x')):
+            self.assertTrue(mediatools._filter_exists('/x/ffmpeg', 'aeval'))
+        mediatools._cache.clear()
+
+    @unittest.skipUnless(mediatools.find_tool('ffmpeg'), 'sem FFmpeg')
+    def test_real_ffmpeg_confirms_real_filters(self):
+        exe = mediatools.find_tool('ffmpeg'); mediatools._cache.clear()
+        self.assertTrue(mediatools._filter_exists(exe, 'aeval')); self.assertFalse(mediatools._filter_exists(exe, 'filtro_que_nao_existe'))
