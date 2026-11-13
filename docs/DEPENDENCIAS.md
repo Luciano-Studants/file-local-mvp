@@ -34,6 +34,9 @@ Ferramentas de desenvolvimento (requirements-dev.txt): PyInstaller (empacotament
 | Vídeo | FFmpeg; opencv-python-headless (opcional) | Evitar builds com `--enable-nonfree` |
 | Dados/Texto | (stdlib; markdown-it-py se Markdown) | — |
 
+## Baixar tudo com um comando (Windows)
+`.\dev.ps1 setup` (Python) e depois `.\dev.ps1 deps` (= `tools\baixar_dependencias.ps1`): baixa o FFmpeg LGPL para `ffmpeg\` (confere SHA-256 e recusa build GPL/nonfree) e instala/copia o Tesseract para `tesseract\`. Para fixar a versão num release, preencha `tools\dependencias.json`. Os binários **não** são versionados no Git (`/ffmpeg/`, `/tesseract/` no `.gitignore`): redistribuí-los exige anexar licenças e oferta do código-fonte, o que se faz só no pacote final. **Ainda não testado em Windows real**; depois de rodar, conferir com `python tools\doctor.py`.
+
 ## Requisitos do build do FFmpeg (checklist para fixar o build LGPL do Windows)
 
 O app confere isto sozinho (`mediatools.build_info`, `python tools/doctor.py`); um build que não atende recusa só a ferramenta afetada, com explicação.
