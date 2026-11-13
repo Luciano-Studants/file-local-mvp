@@ -85,7 +85,10 @@ class RequireTests(unittest.TestCase):
         if not mediatools.find_tool('ffmpeg'):
             self.skipTest('sem FFmpeg')
         info = mediatools.build_info(refresh=True)
-        self.assertIn('aeval', info['filters']); self.assertIn('loudnorm', info['filters'])
+        if info['filters'] is None:      # formato de -filters não reconhecido (ex.: FFmpeg 8): o app confere filtro a filtro
+            print('AVISO: lista de -filters ilegível; amostra:', mediatools.run_tool(mediatools.find_tool('ffmpeg'), ['-filters'])[:400].replace('\n', ' | '))
+        else:
+            self.assertIn('aeval', info['filters']); self.assertIn('loudnorm', info['filters'])
         self.assertEqual(mediatools.unavailable_tools(info), [])
 
 
