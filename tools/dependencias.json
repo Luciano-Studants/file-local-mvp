@@ -1,0 +1,4 @@
+{
+  "_comentario": "Preencha url e sha256 do FFmpeg para fixar a versão (release). Vazio = último build LGPL do BtbN, com checksum publicado.",
+  "ffmpeg": { "url": "", "sha256": "" }
+}

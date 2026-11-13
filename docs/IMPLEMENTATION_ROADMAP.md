@@ -347,7 +347,7 @@ As linhas abaixo são **itens planejados**. “Alta/média/baixa” é viabilida
 
 - Python 3.12 x64 no Windows.
 - Pillow 13.0.0 — licença MIT-CMU/PIL; codecs efetivos devem ser verificados na wheel.
-- pypdf 6.21.1 — BSD-3-Clause.
+- pypdf 6.21.4 — BSD-3-Clause.
 - PySide6-Essentials/shiboken6 6.12.0 — licença Qt aplicável; revisar módulos adicionais antes de incluir QtWebEngine/QtMultimedia.
 - pywin32 — usar somente componentes/arquivos necessários; conferir licença e avisos distribuídos pelo projeto.
 - PyInstaller — ferramenta de empacotamento, build Windows obrigatória; não é dependência que o usuário final deva instalar.
